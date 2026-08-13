@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     max_tool_calls: int = 10
     max_agent_turns_per_email: int = 15
     log_level: str = "INFO"
+    # When true, agent re-runs after each cycle until Ctrl+C
+    agent_continuous_mode: bool = False
+    # Seconds to wait between cycles in continuous mode
+    agent_poll_interval_seconds: int = 60
 
     @property
     def company_data_dir(self) -> Path:

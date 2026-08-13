@@ -79,8 +79,12 @@ class AgentToolKit:
         message = self._email.get_email(email_id)
         if message is None:
             raise ValueError("email_not_found")
-        if not message.sender or not message.body:
+        if not message.sender and not message.body:
             raise ValueError("invalid_email_missing_fields")
+        if not message.sender:
+            raise ValueError("invalid_email_missing_sender")
+        if not message.body:
+            raise ValueError("invalid_email_missing_body")
         state.sender = message.sender
         state.subject = message.subject
         state.body = message.body

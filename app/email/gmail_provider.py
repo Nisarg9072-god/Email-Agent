@@ -163,11 +163,28 @@ class GmailEmailProvider(EmailProvider):
             h["name"]: h["value"]
             for h in detail.get("payload", {}).get("headers", [])
         }
-        body = self._extract_body(detail.get("payload", {}))
+        sender = (
+            headers.get("From")
+            or headers.get("Reply-To")
+            or headers.get("Sender")
+            or ""
+        )
+        body = self._extract_body(service, email_id, detail.get("payload", {}))
+        if not body.strip():
+            body = (detail.get("snippet") or "").strip()
+            if body:
+                logger.info(
+                    "Gmail message %s: using API snippet as body fallback", email_id
+                )
+        if not body.strip() and headers.get("Subject"):
+            body = headers["Subject"]
+            logger.info(
+                "Gmail message %s: using subject as body fallback", email_id
+            )
 
         return EmailMessage(
             email_id=email_id,
-            sender=headers.get("From", ""),
+            sender=sender,
             recipient=headers.get("To", ""),
             subject=headers.get("Subject", ""),
             body=body,
@@ -256,22 +273,34 @@ class GmailEmailProvider(EmailProvider):
         return text.strip()
 
     @classmethod
-    def _collect_text_parts(cls, payload: dict) -> tuple[str, str]:
+    def _collect_text_parts(
+        cls, service, message_id: str, payload: dict
+    ) -> tuple[str, str]:
         """Return (plain_text, html_text) from a Gmail message payload (recursive)."""
         plain_parts: list[str] = []
         html_parts: list[str] = []
 
         mime = payload.get("mimeType", "")
-        body_data = payload.get("body", {}).get("data", "")
+        body_meta = payload.get("body", {})
+        body_data = body_meta.get("data", "")
         if body_data:
             decoded = cls._decode_body_data(body_data)
             if mime == "text/plain":
                 plain_parts.append(decoded)
             elif mime == "text/html":
                 html_parts.append(decoded)
+        elif body_meta.get("attachmentId") and mime.startswith("text/"):
+            decoded = cls._fetch_attachment_text(
+                service, message_id, body_meta["attachmentId"]
+            )
+            if decoded:
+                if mime == "text/plain":
+                    plain_parts.append(decoded)
+                elif mime == "text/html":
+                    html_parts.append(decoded)
 
         for part in payload.get("parts", []):
-            p, h = cls._collect_text_parts(part)
+            p, h = cls._collect_text_parts(service, message_id, part)
             if p:
                 plain_parts.append(p)
             if h:
@@ -280,8 +309,29 @@ class GmailEmailProvider(EmailProvider):
         return "\n".join(plain_parts), "\n".join(html_parts)
 
     @classmethod
-    def _extract_body(cls, payload: dict) -> str:
-        plain, html = cls._collect_text_parts(payload)
+    def _fetch_attachment_text(cls, service, message_id: str, attachment_id: str) -> str:
+        try:
+            att = (
+                service.users()
+                .messages()
+                .attachments()
+                .get(userId="me", messageId=message_id, id=attachment_id)
+                .execute()
+            )
+            data = att.get("data")
+            if data:
+                return cls._decode_body_data(data)
+        except Exception:
+            logger.exception(
+                "Failed to fetch Gmail attachment %s for message %s",
+                attachment_id,
+                message_id,
+            )
+        return ""
+
+    @classmethod
+    def _extract_body(cls, service, message_id: str, payload: dict) -> str:
+        plain, html = cls._collect_text_parts(service, message_id, payload)
         if plain.strip():
             return plain.strip()
         if html.strip():

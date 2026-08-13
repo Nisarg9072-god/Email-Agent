@@ -5,8 +5,8 @@ The LLM never receives these objects or database connections.
 """
 
 import logging
+import re
 from datetime import datetime, timezone
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,14 +14,46 @@ from app.db.models import AgentRun, ProcessedEmail, Reply
 
 logger = logging.getLogger(__name__)
 
+_ATTEMPTS_RE = re.compile(r"attempts=(\d+)")
+_RECLAIM_STUB_RE = re.compile(r"^attempts=\d+$")
+
+NON_RETRYABLE_FAILURES = (
+    "email_not_found",
+    "email_id_mismatch",
+)
+
+
+def failure_attempt_count(error_message: str | None) -> int:
+    if not error_message:
+        return 0
+    match = _ATTEMPTS_RE.search(error_message)
+    if match:
+        return int(match.group(1))
+    # Untagged legacy failures already ran at least once — do not retry forever
+    return 2
+
+
+def is_reclaimed_for_retry(error_message: str | None) -> bool:
+    return bool(error_message and _RECLAIM_STUB_RE.match(error_message.strip()))
+
+
+def is_retryable_failure(error_message: str | None, *, max_attempts: int = 2) -> bool:
+    if not error_message:
+        return True
+    bare = error_message.split("|", 1)[-1]
+    if any(marker in bare for marker in NON_RETRYABLE_FAILURES):
+        return False
+    return failure_attempt_count(error_message) < max_attempts
+
+
 # Valid state transitions for processed emails (Guardrail #1)
 VALID_STATES = {"pending", "processing", "processed", "failed", "skipped"}
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "pending": {"processing", "skipped"},
     "processing": {"processed", "failed", "skipped"},
+    "failed": {"processing"},
     "processed": set(),  # terminal
-    "failed": set(),  # terminal
     "skipped": set(),  # terminal
 }
 
@@ -51,6 +83,23 @@ class ProcessedEmailRepository:
         self._session.flush()
         return True
 
+    def reclaim_failed_for_retry(self, email_id: str, *, max_attempts: int = 2) -> bool:
+        """Move failed -> processing for another attempt without losing attempt count."""
+        record = self.get(email_id)
+        if record is None or record.status != "failed":
+            return False
+        if not is_retryable_failure(record.error_message, max_attempts=max_attempts):
+            return False
+        attempts = failure_attempt_count(record.error_message)
+        if attempts <= 0:
+            attempts = 1
+        self._transition(
+            email_id,
+            "processing",
+            error_message=f"attempts={attempts}",
+        )
+        return True
+
     def clear_skipped_for_retry(self, email_id: str) -> bool:
         """Remove a skipped record so the agent can retry (e.g. reply never sent)."""
         record = self.get(email_id)
@@ -73,6 +122,8 @@ class ProcessedEmailRepository:
             if existing.status in {"processed", "failed", "skipped"}:
                 return False, f"already_{existing.status}"
             if existing.status == "processing":
+                if is_reclaimed_for_retry(existing.error_message):
+                    return True, "reclaimed"
                 return False, "already_processing"
 
         try:
@@ -95,7 +146,15 @@ class ProcessedEmailRepository:
         self._transition(email_id, "processed", classification=classification)
 
     def mark_failed(self, email_id: str, error_message: str) -> None:
-        self._transition(email_id, "failed", error_message=error_message)
+        record = self.get(email_id)
+        prior_attempts = failure_attempt_count(record.error_message if record else None)
+        if record and record.status == "processing" and record.error_message:
+            stub_attempts = failure_attempt_count(record.error_message)
+            if stub_attempts:
+                prior_attempts = stub_attempts
+        attempts = prior_attempts + 1
+        tagged = f"attempts={attempts}|{error_message}"
+        self._transition(email_id, "failed", error_message=tagged)
 
     def mark_skipped(self, email_id: str, skip_reason: str) -> None:
         self._transition(email_id, "skipped", skip_reason=skip_reason)

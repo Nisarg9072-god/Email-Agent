@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from app.agent.decision_normalize import normalize_decision
 from app.agent.schemas import AgentDecision, AgentStepResult
 from app.agent.state import AgentState
-from app.db.repositories import AgentRunRepository, ProcessedEmailRepository, ReplyRepository
+from app.db.repositories import AgentRunRepository, ProcessedEmailRepository, ReplyRepository, failure_attempt_count, is_retryable_failure
 from app.email.base import EmailProvider
 from app.harness.runtime import AgentHarness, HarnessValidationError
 from app.harness.state import ProcessingStateManager
@@ -61,6 +61,14 @@ class AgentRuntime:
             return
         if step.status in {"processed", "skipped"}:
             self._email.mark_as_read(email_id)
+        elif step.status == "failed":
+            record = self._processed_repo.get(email_id)
+            if record and not is_retryable_failure(record.error_message):
+                self._email.mark_as_read(email_id)
+                logger.info(
+                    "Email %s failed with no retries left — marked read to stop reprocessing",
+                    email_id,
+                )
 
     def run(self) -> AgentRunResult:
         self._harness.reset_run()
@@ -79,9 +87,22 @@ class AgentRuntime:
                     summaries.append(summary)
                     continue
                 if record.status == "failed":
-                    if self._processed_repo.clear_failed_for_retry(summary.email_id):
-                        retry_ids.append(summary.email_id)
-                        summaries.append(summary)
+                    if is_retryable_failure(record.error_message):
+                        if self._processed_repo.reclaim_failed_for_retry(summary.email_id):
+                            retry_ids.append(summary.email_id)
+                            summaries.append(summary)
+                            logger.info(
+                                "Re-queuing failed email %s (attempt %d)",
+                                summary.email_id,
+                                failure_attempt_count(record.error_message) + 1,
+                            )
+                        continue
+                    logger.warning(
+                        "Email %s already failed (%s) — max attempts reached; marking read, not reprocessing",
+                        summary.email_id,
+                        record.error_message,
+                    )
+                    cleanup_ids.append(summary.email_id)
                     continue
                 if record.status == "skipped":
                     if not self._reply_repo.has_reply_for_email(summary.email_id):
