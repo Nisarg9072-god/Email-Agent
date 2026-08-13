@@ -30,6 +30,7 @@ credentials.json
 .pytest_cache/
 .coverage
 htmlcov/
+evals/report.json
 
 # OS
 .DS_Store

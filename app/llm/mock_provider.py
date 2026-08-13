@@ -76,7 +76,8 @@ class MockLLMProvider(LLMProvider):
 
         restricted_kw = [
             "internal cost", "profit margin", "confidential roadmap",
-            "current customers", "internal pricing", "day rate",
+            "confidential product roadmap", "current customers", "customer list",
+            "internal pricing", "day rate", "lead ai consultant", "employee info",
         ]
         if any(kw in text for kw in restricted_kw):
             return AgentDecision(
@@ -88,6 +89,16 @@ class MockLLMProvider(LLMProvider):
                 reasoning="Restricted information request — human review.",
             )
 
+        if any(kw in text for kw in ["thank you", "thanks for the previous", "answered my question"]):
+            return AgentDecision(
+                action="FINAL",
+                final_output=AgentFinalOutput(
+                    outcome="no_action",
+                    skip_reason="human_review:unrelated",
+                ),
+                reasoning="Acknowledgement — no auto reply needed.",
+            )
+
         if not state.company_information:
             for kw, name in self.PRODUCT_KEYWORDS.items():
                 if kw in text:
@@ -97,6 +108,13 @@ class MockLLMProvider(LLMProvider):
                         tool_arguments={"product_name": name},
                         reasoning=f"Inquiry mentions {name}; retrieving authorized product data.",
                     )
+            if "novaai" in text:
+                return AgentDecision(
+                    action="CALL_TOOL",
+                    tool_name="get_product_information",
+                    tool_arguments={"product_name": "NovaSupport AI"},
+                    reasoning="General NovaAI inquiry — loading flagship product info.",
+                )
             for kw, name in self.SERVICE_KEYWORDS.items():
                 if kw in text:
                     return AgentDecision(
@@ -151,7 +169,7 @@ class MockLLMProvider(LLMProvider):
                 reasoning="Detected spam/lottery content",
             )
 
-        if "ml engineer" in text or "job" in text and "application" in text or "resume" in text:
+        if "ml engineer" in text or ("job" in text and "application" in text) or "resume" in text:
             return EmailClassification(
                 requires_action=False,
                 is_product_or_service_inquiry=False,
@@ -169,8 +187,9 @@ class MockLLMProvider(LLMProvider):
 
         restricted_kw = [
             "internal cost", "profit margin", "confidential roadmap",
-            "current customers", "internal pricing", "confidential product roadmap",
-            "day rate",
+            "current customers", "customer list", "internal pricing",
+            "confidential product roadmap", "day rate", "lead ai consultant",
+            "employee info",
         ]
         if any(kw in text for kw in restricted_kw):
             return EmailClassification(
@@ -178,6 +197,14 @@ class MockLLMProvider(LLMProvider):
                 is_product_or_service_inquiry=False,
                 category="restricted_info_request",
                 reasoning="Request for restricted/confidential information",
+            )
+
+        if any(kw in text for kw in ["thank you", "thanks for the previous", "answered my question"]):
+            return EmailClassification(
+                requires_action=False,
+                is_product_or_service_inquiry=False,
+                category="other",
+                reasoning="Acknowledgement — no response needed",
             )
 
         product_names = []
@@ -202,7 +229,17 @@ class MockLLMProvider(LLMProvider):
                 reasoning="Demo request for product",
             )
 
-        if "pricing" in text or "price" in text or "cost" in text and "month" in text:
+        if service_names and "custom ai" in text:
+            return EmailClassification(
+                requires_action=True,
+                is_product_or_service_inquiry=True,
+                category="service_inquiry",
+                product_names=product_names,
+                service_names=service_names,
+                reasoning="Custom AI integration service inquiry",
+            )
+
+        if "pricing" in text or "price" in text or ("cost" in text and "month" in text):
             return EmailClassification(
                 requires_action=True,
                 is_product_or_service_inquiry=True,
@@ -220,16 +257,6 @@ class MockLLMProvider(LLMProvider):
                 product_names=product_names,
                 service_names=service_names,
                 reasoning="Feature/integration inquiry detected",
-            )
-
-        if service_names and "custom ai" in text:
-            return EmailClassification(
-                requires_action=True,
-                is_product_or_service_inquiry=True,
-                category="service_inquiry",
-                product_names=product_names,
-                service_names=service_names,
-                reasoning="Custom AI integration service inquiry",
             )
 
         if service_names:
