@@ -41,7 +41,7 @@ class TestProcessingState:
 
         record = processed_repo.get("email-fail")
         assert record.status == "failed"
-        assert record.error_message == "llm_timeout"
+        assert record.error_message == "attempts=1|llm_timeout"
 
     def test_skipped_with_reason(self, processed_repo, state_manager):
         state_manager.claim("email-skip")

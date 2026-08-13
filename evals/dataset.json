@@ -1,6 +1,6 @@
 {
-  "description": "Evaluation dataset for probabilistic LLM behavior. Separate from unit tests.",
-  "version": "1.0",
+  "description": "Evaluation dataset for probabilistic LLM behavior. Used by evals/evaluator.py with MockLLM (default) or Mistral (--mistral).",
+  "version": "2.0",
   "emails": [
     {
       "id": "eval-001",

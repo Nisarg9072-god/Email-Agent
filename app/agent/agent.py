@@ -34,7 +34,13 @@ def create_email_provider(settings: Settings) -> EmailProvider:
     return MockEmailProvider(settings.mock_emails_path)
 
 
-def create_agent(settings: Settings, db: Database) -> AgentRuntime:
+def create_agent(
+    settings: Settings,
+    db: Database,
+    *,
+    email_provider: EmailProvider | None = None,
+    llm=None,
+) -> AgentRuntime:
     """Build the agentic runtime with harness, tools, and LLM."""
     session = db.get_session()
 
@@ -42,13 +48,15 @@ def create_agent(settings: Settings, db: Database) -> AgentRuntime:
     authorization = AuthorizationService(company_repo)
     company_service = CompanyDataService(company_repo, authorization)
 
-    email_provider = create_email_provider(settings)
-    llm = create_llm_provider(
-        settings.llm_provider,
-        api_key=settings.mistral_api_key,
-        model=settings.mistral_model,
-        max_retries=settings.mistral_max_retries,
-    )
+    if email_provider is None:
+        email_provider = create_email_provider(settings)
+    if llm is None:
+        llm = create_llm_provider(
+            settings.llm_provider,
+            api_key=settings.mistral_api_key,
+            model=settings.mistral_model,
+            max_retries=settings.mistral_max_retries,
+        )
 
     processed_repo = ProcessedEmailRepository(session)
     reply_repo = ReplyRepository(session)
