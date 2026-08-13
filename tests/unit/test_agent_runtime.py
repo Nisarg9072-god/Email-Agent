@@ -136,3 +136,23 @@ class TestAgentRuntime:
         result = agent.run()
         failed = [s for s in result.steps if s.email_id == "mock-001"]
         assert failed[0].status == "failed"
+
+    def test_spam_marked_read_job_application_left_unread(
+        self, session, mock_email_provider, mock_llm, authorization, validator,
+        state_manager, processed_repo, reply_repo, company_service,
+    ):
+        agent = self._build_agent(
+            session, mock_email_provider, mock_llm, authorization, validator,
+            state_manager, processed_repo, reply_repo, company_service,
+        )
+        mock_email_provider.reset_sent()
+        mock_email_provider.reset_marked_read()
+        result = agent.run()
+        spam = [s for s in result.steps if s.email_id == "mock-007"]
+        job = [s for s in result.steps if s.email_id == "mock-005"]
+        assert spam[0].status == "skipped"
+        assert job[0].status == "skipped"
+        assert "mock-007" in mock_email_provider.marked_read_ids
+        assert "mock-005" not in mock_email_provider.marked_read_ids
+        processed_ids = {s.email_id for s in result.steps if s.status == "processed"}
+        assert processed_ids.issubset(set(mock_email_provider.marked_read_ids))

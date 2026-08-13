@@ -16,6 +16,7 @@ class MockEmailProvider(EmailProvider):
         self._emails_path = emails_path
         self._emails: list[dict] = self._load_emails()
         self._sent: list[dict] = []
+        self._marked_read: list[str] = []
 
     def _load_emails(self) -> list[dict]:
         with open(self._emails_path) as f:
@@ -69,3 +70,14 @@ class MockEmailProvider(EmailProvider):
 
     def reset_sent(self) -> None:
         self._sent.clear()
+
+    def mark_as_read(self, email_id: str) -> bool:
+        self._marked_read.append(email_id)
+        return True
+
+    def reset_marked_read(self) -> None:
+        self._marked_read.clear()
+
+    @property
+    def marked_read_ids(self) -> list[str]:
+        return list(self._marked_read)

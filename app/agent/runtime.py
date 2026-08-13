@@ -10,6 +10,7 @@ from app.agent.state import AgentState
 from app.db.repositories import AgentRunRepository, ProcessedEmailRepository, ReplyRepository, failure_attempt_count, is_retryable_failure
 from app.email.base import EmailProvider
 from app.harness.runtime import AgentHarness, HarnessValidationError
+from app.harness.read_policy import should_mark_gmail_read, should_retry_skipped
 from app.harness.state import ProcessingStateManager
 from app.llm.base import LLMProvider
 from app.tools.agent_toolkit import AgentToolKit
@@ -55,20 +56,51 @@ class AgentRuntime:
         self._reply_repo = reply_repo
         self._agent_run_repo = agent_run_repo
 
+    def _mark_read_enabled(self) -> bool:
+        return bool(getattr(self._email, "_mark_read_after_processing", True))
+
+    def _maybe_mark_read(
+        self,
+        email_id: str,
+        *,
+        status: str,
+        skip_reason: str | None = None,
+        reply_sent: bool = False,
+    ) -> bool:
+        if should_mark_gmail_read(
+            status=status,
+            skip_reason=skip_reason,
+            reply_sent=reply_sent,
+            mark_read_enabled=self._mark_read_enabled(),
+        ):
+            if self._email.mark_as_read(email_id):
+                logger.info(
+                    "Email %s marked read (status=%s, skip_reason=%s)",
+                    email_id,
+                    status,
+                    skip_reason,
+                )
+                return True
+            return False
+        if self._mark_read_enabled():
+            logger.info(
+                "Email %s left UNREAD for human review (status=%s, skip_reason=%s)",
+                email_id,
+                status,
+                skip_reason,
+            )
+        return False
+
     def _finalize_email(self, email_id: str, step: AgentStepResult) -> None:
-        """Mark Gmail read after successful terminal outcome."""
+        """Mark Gmail read only when policy allows (reply sent or safe auto-handled skip)."""
         if step.skip_reason == "already_processing":
             return
-        if step.status in {"processed", "skipped"}:
-            self._email.mark_as_read(email_id)
-        elif step.status == "failed":
-            record = self._processed_repo.get(email_id)
-            if record and not is_retryable_failure(record.error_message):
-                self._email.mark_as_read(email_id)
-                logger.info(
-                    "Email %s failed with no retries left — marked read to stop reprocessing",
-                    email_id,
-                )
+        self._maybe_mark_read(
+            email_id,
+            status=step.status,
+            skip_reason=step.skip_reason,
+            reply_sent=step.reply_sent,
+        )
 
     def run(self) -> AgentRunResult:
         self._harness.reset_run()
@@ -98,37 +130,56 @@ class AgentRuntime:
                             )
                         continue
                     logger.warning(
-                        "Email %s already failed (%s) — max attempts reached; marking read, not reprocessing",
+                        "Email %s already failed (%s) — max attempts reached; leaving unread for review",
                         summary.email_id,
                         record.error_message,
                     )
-                    cleanup_ids.append(summary.email_id)
+                    result.emails_skipped += 1
                     continue
                 if record.status == "skipped":
-                    if not self._reply_repo.has_reply_for_email(summary.email_id):
+                    if should_retry_skipped(
+                        record.skip_reason,
+                        has_reply=self._reply_repo.has_reply_for_email(summary.email_id),
+                    ):
                         if self._processed_repo.clear_skipped_for_retry(summary.email_id):
                             retry_ids.append(summary.email_id)
                             summaries.append(summary)
                         continue
-                    cleanup_ids.append(summary.email_id)
-                    logger.debug(
-                        "Skip %s: already skipped with reply on file",
-                        summary.email_id,
-                    )
+                    if should_mark_gmail_read(
+                        status="skipped",
+                        skip_reason=record.skip_reason,
+                        reply_sent=self._reply_repo.has_reply_for_email(summary.email_id),
+                        mark_read_enabled=self._mark_read_enabled(),
+                    ):
+                        cleanup_ids.append(summary.email_id)
+                    else:
+                        logger.debug(
+                            "Skip %s: terminal skip — left unread (%s)",
+                            summary.email_id,
+                            record.skip_reason,
+                        )
+                        result.emails_skipped += 1
                     continue
                 if record.status == "processed":
-                    cleanup_ids.append(summary.email_id)
+                    if should_mark_gmail_read(
+                        status="processed",
+                        skip_reason=None,
+                        reply_sent=self._reply_repo.has_reply_for_email(summary.email_id),
+                        mark_read_enabled=self._mark_read_enabled(),
+                    ):
+                        cleanup_ids.append(summary.email_id)
                     logger.debug(
                         "Skip %s: already processed in database",
                         summary.email_id,
                     )
                     continue
-                # Stuck in processing — do not re-run LLM; clear unread noise only
-                cleanup_ids.append(summary.email_id)
+                # Stuck in processing — leave unread for human investigation
                 logger.warning(
-                    "Email %s stuck in processing — marking read without reprocessing",
+                    "Email %s stuck in processing — left unread, not reprocessing",
                     summary.email_id,
                 )
+                result.emails_skipped += 1
+                continue
 
             if retry_ids:
                 logger.info(

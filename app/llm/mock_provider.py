@@ -47,7 +47,9 @@ class MockLLMProvider(LLMProvider):
             return AgentDecision(
                 action="FINAL",
                 final_output=AgentFinalOutput(
-                    outcome="skip", skip_reason="category_spam_no_auto_reply", message="Spam detected"
+                    outcome="skip",
+                    skip_reason="auto_handled:spam",
+                    message="Spam detected",
                 ),
                 reasoning="Spam email — no reply.",
             )
@@ -56,18 +58,20 @@ class MockLLMProvider(LLMProvider):
             return AgentDecision(
                 action="FINAL",
                 final_output=AgentFinalOutput(
-                    outcome="skip", skip_reason="category_job_application_no_auto_reply"
+                    outcome="no_action",
+                    skip_reason="human_review:job_application",
                 ),
-                reasoning="Job application — skip auto reply.",
+                reasoning="Job application — leave unread for HR.",
             )
 
         if "partnership" in text or "resell" in text:
             return AgentDecision(
                 action="FINAL",
                 final_output=AgentFinalOutput(
-                    outcome="skip", skip_reason="category_partnership_no_auto_reply"
+                    outcome="no_action",
+                    skip_reason="human_review:partnership",
                 ),
-                reasoning="Partnership inquiry — skip auto reply.",
+                reasoning="Partnership inquiry — leave unread for staff.",
             )
 
         restricted_kw = [
@@ -78,9 +82,10 @@ class MockLLMProvider(LLMProvider):
             return AgentDecision(
                 action="FINAL",
                 final_output=AgentFinalOutput(
-                    outcome="skip", skip_reason="restricted_info_request_declined"
+                    outcome="no_action",
+                    skip_reason="human_review:restricted_info",
                 ),
-                reasoning="Restricted information request.",
+                reasoning="Restricted information request — human review.",
             )
 
         if not state.company_information:
@@ -102,7 +107,11 @@ class MockLLMProvider(LLMProvider):
                     )
             return AgentDecision(
                 action="FINAL",
-                final_output=AgentFinalOutput(outcome="no_action", message="not_product_or_service_inquiry"),
+                final_output=AgentFinalOutput(
+                    outcome="no_action",
+                    skip_reason="human_review:unrelated",
+                    message="not_product_or_service_inquiry",
+                ),
                 reasoning="No product/service inquiry detected.",
             )
 

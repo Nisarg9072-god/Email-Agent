@@ -263,8 +263,10 @@ Legacy predetermined workflow: `app/agent/loop.py` (deprecated, tests skipped).
 | Not found | Process as new email |
 | `failed` (retryable) | Reclaim and retry (max 2 attempts) |
 | `skipped` (no reply logged) | Clear record and retry |
-| `processed` / terminal `skipped` | Batch mark read in Gmail (cleanup) |
-| `failed` (max attempts) | Mark read, do not reprocess |
+| `processed` (reply sent) | Mark read in Gmail (cleanup) |
+| `skipped` (human review: job, partnership, unrelated) | **Stay UNREAD** — staff can review |
+| `skipped` (auto-handled spam) | Mark read |
+| `failed` (max attempts) | **Stay UNREAD** — staff can investigate |
 
 ### When the Loop Starts
 
@@ -328,7 +330,7 @@ Outer mailbox loop also stops when all emails processed or `MAX_AGENT_STEPS` exc
 
 - Failures mark email `failed` in SQLite with `attempts=N|error` tagging
 - **Retryable** failures (attempts < 2) are reclaimed on next cycle if still unread in Gmail
-- **Legacy untagged** or **max-attempt** failures are marked read and not retried
+- **Legacy untagged** or **max-attempt** failures stay **UNREAD** in Gmail (DB prevents reprocessing)
 - `decision_normalize.py` repairs common Mistral malformed decisions before harness validation
 
 ---
@@ -1139,7 +1141,7 @@ python scripts/qa_verify.py
 | `GMAIL_QUERY` | No | `in:inbox is:unread` | Gmail search filter for candidate messages |
 | `GMAIL_MAX_MESSAGES_PER_RUN` | No | `50` | Max new emails to agent-process per cycle |
 | `GMAIL_UNREAD_SCAN_LIMIT` | No | `100` | Unread IDs to scan per cycle (≥ max messages) |
-| `GMAIL_MARK_READ_AFTER_PROCESSING` | No | `true` | Remove UNREAD label after terminal outcomes |
+| `GMAIL_MARK_READ_AFTER_PROCESSING` | No | `true` | When true, mark read **only** after reply sent or clear spam — unrelated/job/partnership emails stay UNREAD |
 | `MAX_AGENT_STEPS` | No | `50` | Max emails processed per run |
 | `MAX_AGENT_TURNS_PER_EMAIL` | No | `15` | Max LLM turns per email |
 | `MAX_TOOL_CALLS` | No | `10` | Max tool executions per email |

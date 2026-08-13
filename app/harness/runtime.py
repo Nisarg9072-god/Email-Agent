@@ -6,6 +6,7 @@ from typing import Any
 from app.agent.schemas import AgentDecision, AgentFinalOutput
 from app.agent.state import AgentState
 from app.company.authorization import AuthorizationService
+from app.harness.read_policy import normalize_skip_reason
 from app.tools.registry import TOOL_NAMES, tools_for_llm_prompt
 
 logger = logging.getLogger(__name__)
@@ -108,11 +109,13 @@ class AgentHarness:
     def interpret_final(final_output: AgentFinalOutput, state: AgentState) -> tuple[str, str | None]:
         """Map FINAL decision to step status and optional skip reason."""
         if final_output.outcome == "skip":
-            return "skipped", final_output.skip_reason or final_output.message or "agent_skip"
+            raw = final_output.skip_reason or final_output.message or "agent_skip"
+            return "skipped", normalize_skip_reason(raw)
         if final_output.outcome == "no_action":
-            return "skipped", final_output.skip_reason or "no_action"
+            raw = final_output.skip_reason or "no_action"
+            return "skipped", normalize_skip_reason(raw)
         if final_output.outcome == "completed":
             if state.reply_sent:
                 return "processed", None
-            return "skipped", final_output.message or "completed_without_reply"
+            return "skipped", "completed_without_reply"
         return "failed", f"unknown_final_outcome:{final_output.outcome}"

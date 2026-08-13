@@ -31,7 +31,7 @@ flowchart TD
         TOOL[AgentToolKit execute]
         UPDATE[Append tool result to state]
         FINAL{action == FINAL?}
-        DONE[Persist outcome + mark Gmail read]
+        DONE[Persist outcome + selective Gmail mark-read]
     end
 
     subgraph STORAGE["PERSISTENCE"]
@@ -81,8 +81,13 @@ Before the agentic loop, runtime classifies each unread ID:
 | Not in DB | Process (new email) |
 | `failed` (retryable, attempts < 2) | Reclaim → retry |
 | `skipped` (no reply logged) | Clear → retry |
-| `processed` / terminal `skipped` | Batch mark read (cleanup) |
-| `failed` (max attempts) | Mark read, stop retrying |
+| `processed` (reply sent) | Batch mark read (cleanup) |
+| `skipped` (`human_review:*`) | **Leave UNREAD** — no retry |
+| `skipped` (`auto_handled:spam`) | Mark read |
+| `skipped` (`completed_without_reply`) | Retry agent |
+| `failed` (max attempts) | **Leave UNREAD** — no retry |
+
+Policy module: `app/harness/read_policy.py`
 
 ---
 
@@ -99,6 +104,7 @@ Before the agentic loop, runtime classifies each unread ID:
 | Tool execution | `app/tools/agent_toolkit.py` | Deterministic tool implementations |
 | LLM providers | `app/llm/` | `decide_next_action()`, `generate_reply()` |
 | Duplicate guard | `app/harness/state.py` | `ProcessingStateManager` |
+| Mark-read policy | `app/harness/read_policy.py` | Reply/spam only — human-review stays UNREAD |
 | Retry policy | `app/db/repositories.py` | `reclaim_failed_for_retry`, attempt counting |
 | Gmail provider | `app/email/gmail_provider.py` | OAuth, scan, batch mark-read, body parsing |
 | Reply validation | `app/harness/validator.py` | Pre-send checks |
