@@ -28,6 +28,8 @@ def create_email_provider(settings: Settings) -> EmailProvider:
             token_path=settings.gmail_token_path,
             query=settings.gmail_query,
             max_messages_per_run=settings.gmail_max_messages_per_run,
+            unread_scan_limit=settings.gmail_unread_scan_limit,
+            mark_read_after_processing=settings.gmail_mark_read_after_processing,
         )
     return MockEmailProvider(settings.mock_emails_path)
 

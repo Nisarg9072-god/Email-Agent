@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
+from app.agent.decision_normalize import normalize_decision
 from app.agent.schemas import AgentDecision, AgentStepResult
 from app.agent.state import AgentState
 from app.db.repositories import AgentRunRepository, ProcessedEmailRepository, ReplyRepository
@@ -54,6 +55,13 @@ class AgentRuntime:
         self._reply_repo = reply_repo
         self._agent_run_repo = agent_run_repo
 
+    def _finalize_email(self, email_id: str, step: AgentStepResult) -> None:
+        """Mark Gmail read after successful terminal outcome."""
+        if step.skip_reason == "already_processing":
+            return
+        if step.status in {"processed", "skipped"}:
+            self._email.mark_as_read(email_id)
+
     def run(self) -> AgentRunResult:
         self._harness.reset_run()
         run = self._agent_run_repo.start_run()
@@ -61,14 +69,89 @@ class AgentRuntime:
 
         try:
             count = self._email.get_email_count()
-            result.emails_found = count
-            summaries = self._email.list_emails()
-            logger.info("Agent run %d: %d emails, ids=%s", run.id, count, [s.email_id for s in summaries])
+            all_summaries = self._email.list_emails()
+            summaries = []
+            cleanup_ids: list[str] = []
+            retry_ids: list[str] = []
+            for summary in all_summaries:
+                record = self._processed_repo.get(summary.email_id)
+                if record is None:
+                    summaries.append(summary)
+                    continue
+                if record.status == "failed":
+                    if self._processed_repo.clear_failed_for_retry(summary.email_id):
+                        retry_ids.append(summary.email_id)
+                        summaries.append(summary)
+                    continue
+                if record.status == "skipped":
+                    if not self._reply_repo.has_reply_for_email(summary.email_id):
+                        if self._processed_repo.clear_skipped_for_retry(summary.email_id):
+                            retry_ids.append(summary.email_id)
+                            summaries.append(summary)
+                        continue
+                    cleanup_ids.append(summary.email_id)
+                    logger.debug(
+                        "Skip %s: already skipped with reply on file",
+                        summary.email_id,
+                    )
+                    continue
+                if record.status == "processed":
+                    cleanup_ids.append(summary.email_id)
+                    logger.debug(
+                        "Skip %s: already processed in database",
+                        summary.email_id,
+                    )
+                    continue
+                # Stuck in processing — do not re-run LLM; clear unread noise only
+                cleanup_ids.append(summary.email_id)
+                logger.warning(
+                    "Email %s stuck in processing — marking read without reprocessing",
+                    summary.email_id,
+                )
+
+            if retry_ids:
+                logger.info(
+                    "Retrying %d unread message(s) from prior incomplete run(s): %s",
+                    len(retry_ids),
+                    retry_ids,
+                )
+
+            if cleanup_ids:
+                marked = self._email.mark_many_as_read(cleanup_ids)
+                logger.info(
+                    "%d already-handled unread message(s) marked read (no reprocessing): %s",
+                    marked,
+                    cleanup_ids[:5],
+                )
+                result.emails_skipped += len(cleanup_ids)
+
+            # Process at most gmail max (via harness email slot limit already); cap new queue
+            max_new = getattr(self._email, "_max_messages", len(summaries))
+            if len(summaries) > max_new:
+                logger.info(
+                    "Found %d never-seen unread email(s); processing first %d this run",
+                    len(summaries),
+                    max_new,
+                )
+                summaries = summaries[:max_new]
+
+            result.emails_found = len(summaries)
+            logger.info(
+                "Agent run %d: %d email(s) to process (scanned=%d, cleanup=%d, retry=%d)",
+                run.id,
+                len(summaries),
+                count,
+                len(cleanup_ids),
+                len(retry_ids),
+            )
+            if summaries:
+                logger.info("Email ids to process: %s", [s.email_id for s in summaries])
 
             for summary in summaries:
                 if not self._harness.increment_email_slot():
                     break
                 step = self._run_agentic_loop(summary.email_id)
+                self._finalize_email(summary.email_id, step)
                 result.steps.append(step)
                 if step.status == "processed":
                     result.emails_processed += 1
@@ -122,6 +205,7 @@ class AgentRuntime:
 
             try:
                 decision = self._llm.decide_next_action(agent_state, tool_catalog)
+                decision = normalize_decision(decision, email_id, agent_state, self._llm)
             except Exception as exc:
                 step.status = "failed"
                 step.error_message = f"decision_failed:{exc}"

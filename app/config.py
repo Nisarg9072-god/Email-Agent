@@ -25,8 +25,11 @@ class Settings(BaseSettings):
     gmail_token_path: str = "token.json"
     # Gmail search query for messages to process (must match Gmail search syntax)
     gmail_query: str = "in:inbox is:unread"
-    # Max Gmail messages to list per run (avoids fetching thousands of unread IDs/metadata)
+    # Max new unread emails to agent-process per run
     gmail_max_messages_per_run: int = 50
+    # How many unread Gmail IDs to scan per run (must be >= max_messages) to find NEW mail
+    gmail_unread_scan_limit: int = 100
+    gmail_mark_read_after_processing: bool = True
     max_agent_steps: int = 50
     max_tool_calls: int = 10
     max_agent_turns_per_email: int = 15

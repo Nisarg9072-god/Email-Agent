@@ -29,11 +29,15 @@ class GmailEmailProvider(EmailProvider):
         token_path: str,
         query: str = DEFAULT_GMAIL_QUERY,
         max_messages_per_run: int = 50,
+        unread_scan_limit: int = 100,
+        mark_read_after_processing: bool = True,
     ):
         self._credentials_path = credentials_path
         self._token_path = token_path
         self._query = query or DEFAULT_GMAIL_QUERY
         self._max_messages = max(1, max_messages_per_run)
+        self._scan_limit = max(self._max_messages, unread_scan_limit)
+        self._mark_read_after_processing = mark_read_after_processing
         self._service = None
         self._unread_refs_cache: list[dict] | None = None
         self._has_more_unread = False
@@ -75,9 +79,12 @@ class GmailEmailProvider(EmailProvider):
         self._service = build("gmail", "v1", credentials=creds)
         return self._service
 
-    def _list_matching_message_refs(self, *, refresh: bool = False) -> list[dict]:
-        """Paginate Gmail messages.list and return accurate unread refs (not an estimate)."""
-        if self._unread_refs_cache is not None and not refresh:
+    def _list_matching_message_refs(
+        self, *, max_fetch: int | None = None, refresh: bool = False
+    ) -> list[dict]:
+        """Paginate Gmail messages.list up to max_fetch IDs (accurate, not estimate)."""
+        fetch_limit = max_fetch if max_fetch is not None else self._scan_limit
+        if self._unread_refs_cache is not None and not refresh and max_fetch is None:
             return self._unread_refs_cache
 
         service = self._get_service()
@@ -85,7 +92,7 @@ class GmailEmailProvider(EmailProvider):
         page_token: str | None = None
         self._has_more_unread = False
 
-        while len(refs) < self._max_messages:
+        while len(refs) < fetch_limit:
             kwargs: dict = {"userId": "me", "q": self._query, "maxResults": 500}
             if page_token:
                 kwargs["pageToken"] = page_token
@@ -97,9 +104,9 @@ class GmailEmailProvider(EmailProvider):
             batch = result.get("messages", [])
             refs.extend(batch)
             page_token = result.get("nextPageToken")
-            if len(refs) >= self._max_messages:
-                refs = refs[: self._max_messages]
-                self._has_more_unread = bool(page_token) or len(batch) > self._max_messages
+            if len(refs) >= fetch_limit:
+                refs = refs[:fetch_limit]
+                self._has_more_unread = bool(page_token) or len(batch) > fetch_limit
                 break
             if not page_token:
                 break
@@ -107,28 +114,27 @@ class GmailEmailProvider(EmailProvider):
         self._unread_refs_cache = refs
         if self._has_more_unread:
             logger.warning(
-                "Gmail query=%r has MORE than %d unread match(es); "
-                "processing first %d only (raise GMAIL_MAX_MESSAGES_PER_RUN or mark mail read in Gmail)",
+                "Gmail query=%r has MORE than %d unread match(es) in this scan "
+                "(increase GMAIL_UNREAD_SCAN_LIMIT or mark mail read in Gmail)",
                 self._query,
-                self._max_messages,
-                len(refs),
+                fetch_limit,
             )
         else:
             logger.info(
-                "Gmail query=%r matched %d message(s)",
+                "Gmail query=%r scanned %d unread message(s)",
                 self._query,
                 len(refs),
             )
         return refs
 
     def get_email_count(self) -> int:
-        return len(self._list_matching_message_refs())
+        return len(self._list_matching_message_refs(max_fetch=self._scan_limit, refresh=True))
 
     def list_emails(self) -> list[EmailSummary]:
-        """Return unread message IDs only — sender/subject loaded later via get_email tool."""
+        """Return unread IDs from a wide scan — runtime filters/prioritizes new mail."""
         summaries: list[EmailSummary] = []
 
-        for msg in self._list_matching_message_refs():
+        for msg in self._list_matching_message_refs(max_fetch=self._scan_limit, refresh=True):
             summaries.append(
                 EmailSummary(
                     email_id=msg["id"],
@@ -189,6 +195,48 @@ class GmailEmailProvider(EmailProvider):
         except Exception:
             logger.exception("Failed to send email to %s", to)
             return False
+
+    def mark_as_read(self, email_id: str) -> bool:
+        """Remove UNREAD label in Gmail so the message is not picked up on the next run."""
+        if not self._mark_read_after_processing:
+            return True
+        try:
+            service = self._get_service()
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"removeLabelIds": ["UNREAD"]},
+            ).execute()
+            logger.info("Gmail: marked message %s as read", email_id)
+            return True
+        except Exception:
+            logger.exception("Failed to mark Gmail message %s as read", email_id)
+            return False
+
+    def mark_many_as_read(self, email_ids: list[str]) -> int:
+        """Batch-remove UNREAD label (Gmail allows up to 1000 IDs per call)."""
+        if not email_ids or not self._mark_read_after_processing:
+            return 0
+        service = self._get_service()
+        marked = 0
+        for i in range(0, len(email_ids), 1000):
+            chunk = email_ids[i : i + 1000]
+            try:
+                service.users().messages().batchModify(
+                    userId="me",
+                    body={"ids": chunk, "removeLabelIds": ["UNREAD"]},
+                ).execute()
+                marked += len(chunk)
+            except Exception:
+                logger.exception(
+                    "Gmail batchModify failed for %d message(s)", len(chunk)
+                )
+                for email_id in chunk:
+                    if self.mark_as_read(email_id):
+                        marked += 1
+        if marked:
+            logger.info("Gmail: batch marked %d message(s) as read", marked)
+        return marked
 
     @staticmethod
     def _decode_body_data(data: str) -> str:

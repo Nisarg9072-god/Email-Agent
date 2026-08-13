@@ -42,6 +42,24 @@ class ProcessedEmailRepository:
             return False
         return record.status in {"processed", "failed", "skipped"}
 
+    def clear_failed_for_retry(self, email_id: str) -> bool:
+        """Remove a failed record so the agent can process the email again."""
+        record = self.get(email_id)
+        if record is None or record.status != "failed":
+            return False
+        self._session.delete(record)
+        self._session.flush()
+        return True
+
+    def clear_skipped_for_retry(self, email_id: str) -> bool:
+        """Remove a skipped record so the agent can retry (e.g. reply never sent)."""
+        record = self.get(email_id)
+        if record is None or record.status != "skipped":
+            return False
+        self._session.delete(record)
+        self._session.flush()
+        return True
+
     def claim_for_processing(self, email_id: str) -> tuple[bool, str]:
         """Atomically claim an email for processing.
 
@@ -64,10 +82,10 @@ class ProcessedEmailRepository:
             else:
                 existing.status = "processing"
                 existing.updated_at = datetime.now(timezone.utc)
-            self._session.flush()
+            with self._session.begin_nested():
+                self._session.flush()
             return True, "claimed"
         except IntegrityError:
-            self._session.rollback()
             logger.warning("Race condition detected for email_id=%s", email_id)
             return False, "race_condition_duplicate"
 
@@ -147,6 +165,14 @@ class ReplyRepository:
         if reply:
             reply.status = "failed"
             reply.error_message = error_message
+
+    def has_reply_for_email(self, email_id: str) -> bool:
+        from sqlalchemy import select
+
+        row = self._session.execute(
+            select(Reply.id).where(Reply.email_id == email_id).limit(1)
+        ).first()
+        return row is not None
 
 
 class AgentRunRepository:

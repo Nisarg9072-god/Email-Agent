@@ -43,3 +43,15 @@ class EmailProvider(ABC):
         self, to: str, subject: str, body: str, thread_id: str | None = None
     ) -> bool:
         pass
+
+    def mark_as_read(self, email_id: str) -> bool:
+        """Mark message handled so it no longer matches is:unread queries. No-op on mock."""
+        return True
+
+    def mark_many_as_read(self, email_ids: list[str]) -> int:
+        """Batch-mark messages read. Returns count successfully marked."""
+        marked = 0
+        for email_id in email_ids:
+            if self.mark_as_read(email_id):
+                marked += 1
+        return marked
