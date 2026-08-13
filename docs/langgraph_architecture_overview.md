@@ -2,7 +2,11 @@
 
 This document explains LangGraph concepts, how they relate to the **current AI Email Handling Agent** implementation, and how the architecture could evolve using LangGraph in the future.
 
-> **Critical fact:** The current Email Agent does **not** use LangGraph. Orchestration is implemented as an explicit Python class — `AgentLoop` in `app/agent/loop.py`. All diagrams labeled **CURRENT** reflect the actual codebase. Diagrams labeled **CONCEPTUAL / FUTURE** describe patterns not yet implemented.
+> **Critical fact:** The current Email Agent does **not** use LangGraph.
+>
+> **On branch `feature/true-agentic-loop`:** Per-email orchestration is **`AgentRuntime`** (`app/agent/runtime.py`) with LLM-chosen tools via **`AgentDecision`**. The harness is **`AgentHarness`** (`app/harness/runtime.py`). Legacy **`AgentLoop`** (`app/agent/loop.py`) is deprecated.
+>
+> Diagrams below labeled **CURRENT (main / legacy)** describe the predetermined workflow. For the agentic architecture see [AGENT_WORKFLOW_DIAGRAM.md](AGENT_WORKFLOW_DIAGRAM.md) and [presentation.md](presentation.md).
 
 > **Real API flow (Gmail + Mistral):** For email storage, batch run model, and full production API sequence diagrams, see **[REAL_API_SYSTEM_FLOW.md](REAL_API_SYSTEM_FLOW.md)**.
 

@@ -6,7 +6,8 @@ No API key required. Used when LLM_PROVIDER=mock.
 
 import logging
 
-from app.agent.schemas import EmailClassification, GeneratedReply
+from app.agent.schemas import AgentDecision, AgentFinalOutput, EmailClassification, GeneratedReply
+from app.agent.state import AgentState
 from app.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,104 @@ class MockLLMProvider(LLMProvider):
         "chatbot implementation": "AI chatbot implementation",
         "chatbot": "AI chatbot implementation",
     }
+
+    def decide_next_action(self, state: AgentState, tool_catalog: str) -> AgentDecision:
+        """State-driven mock agent — tool choice changes based on prior results."""
+        if state.body is None:
+            return AgentDecision(
+                action="CALL_TOOL",
+                tool_name="get_email",
+                tool_arguments={"email_id": state.email_id},
+                reasoning="Email content not loaded; fetching full message first.",
+            )
+
+        text = f"{state.subject or ''} {state.body}".lower()
+
+        if any(kw in text for kw in ["won $", "lottery", "click here to claim"]):
+            return AgentDecision(
+                action="FINAL",
+                final_output=AgentFinalOutput(
+                    outcome="skip", skip_reason="category_spam_no_auto_reply", message="Spam detected"
+                ),
+                reasoning="Spam email — no reply.",
+            )
+
+        if "ml engineer" in text or ("job" in text and "application" in text) or "resume" in text:
+            return AgentDecision(
+                action="FINAL",
+                final_output=AgentFinalOutput(
+                    outcome="skip", skip_reason="category_job_application_no_auto_reply"
+                ),
+                reasoning="Job application — skip auto reply.",
+            )
+
+        if "partnership" in text or "resell" in text:
+            return AgentDecision(
+                action="FINAL",
+                final_output=AgentFinalOutput(
+                    outcome="skip", skip_reason="category_partnership_no_auto_reply"
+                ),
+                reasoning="Partnership inquiry — skip auto reply.",
+            )
+
+        restricted_kw = [
+            "internal cost", "profit margin", "confidential roadmap",
+            "current customers", "internal pricing", "day rate",
+        ]
+        if any(kw in text for kw in restricted_kw):
+            return AgentDecision(
+                action="FINAL",
+                final_output=AgentFinalOutput(
+                    outcome="skip", skip_reason="restricted_info_request_declined"
+                ),
+                reasoning="Restricted information request.",
+            )
+
+        if not state.company_information:
+            for kw, name in self.PRODUCT_KEYWORDS.items():
+                if kw in text:
+                    return AgentDecision(
+                        action="CALL_TOOL",
+                        tool_name="get_product_information",
+                        tool_arguments={"product_name": name},
+                        reasoning=f"Inquiry mentions {name}; retrieving authorized product data.",
+                    )
+            for kw, name in self.SERVICE_KEYWORDS.items():
+                if kw in text:
+                    return AgentDecision(
+                        action="CALL_TOOL",
+                        tool_name="get_service_information",
+                        tool_arguments={"service_name": name},
+                        reasoning=f"Inquiry mentions {name}; retrieving authorized service data.",
+                    )
+            return AgentDecision(
+                action="FINAL",
+                final_output=AgentFinalOutput(outcome="no_action", message="not_product_or_service_inquiry"),
+                reasoning="No product/service inquiry detected.",
+            )
+
+        if not state.reply_sent:
+            company_info = "\n\n".join(state.company_information)
+            reply = self.generate_reply(
+                state.sender or "", state.subject or "", state.body or "", company_info
+            )
+            return AgentDecision(
+                action="CALL_TOOL",
+                tool_name="send_reply",
+                tool_arguments={
+                    "recipient": state.sender,
+                    "subject": reply.subject,
+                    "body": reply.body,
+                    "thread_id": state.thread_id,
+                },
+                reasoning="Sufficient authorized company information gathered; sending reply.",
+            )
+
+        return AgentDecision(
+            action="FINAL",
+            final_output=AgentFinalOutput(outcome="completed", message="Reply sent"),
+            reasoning="Reply already sent; finishing.",
+        )
 
     def classify_email(
         self, sender: str, subject: str, body: str

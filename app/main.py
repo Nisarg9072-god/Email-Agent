@@ -45,6 +45,10 @@ def print_run_results(result) -> None:
             print(f"    reasoning: {c.reasoning}")
         if step.tool_calls:
             print(f"  Tool calls: {step.tool_calls}")
+        if step.agent_turns:
+            print(f"  Agent turns: {step.agent_turns}")
+        if step.decision_trace:
+            print(f"  Decisions: {len(step.decision_trace)} steps")
         if step.reply_sent:
             print(f"  Reply: SENT")
         else:

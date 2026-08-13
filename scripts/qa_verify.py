@@ -354,22 +354,21 @@ def check_error_handling():
     section("14. ERROR HANDLING")
     from unittest.mock import MagicMock
 
-    from app.agent.loop import AgentLoop
-    from app.agent.schemas import EmailClassification
+    from app.agent.runtime import AgentRuntime
+    from app.agent.schemas import AgentDecision, EmailClassification, GeneratedReply
     from app.company.authorization import AuthorizationService
     from app.company.repository import CompanyRepository
     from app.company.service import CompanyDataService
     from app.config import Settings
     from app.db.database import Database
     from app.db.repositories import AgentRunRepository, ProcessedEmailRepository, ReplyRepository
-    from app.email.base import EmailMessage
     from app.email.mock_provider import MockEmailProvider
-    from app.harness.guardrails import AgentGuardrails
+    from app.harness.runtime import AgentHarness
     from app.harness.state import ProcessingStateManager
     from app.harness.validator import ResponseValidator
     from app.llm.base import LLMProvider
     from app.llm.exceptions import MistralAPIError
-    from app.tools.company_data_tools import CompanyDataTools
+    from app.tools.agent_toolkit import AgentToolKit
 
     settings = Settings(database_url="sqlite:///:memory:", llm_provider="mock")
     db = Database(settings.database_url)
@@ -378,55 +377,66 @@ def check_error_handling():
     repo = CompanyRepository(settings.company_data_dir)
     auth = AuthorizationService(repo)
     service = CompanyDataService(repo, auth)
-    tools = CompanyDataTools(service, auth)
     email = MockEmailProvider(settings.mock_emails_path)
     state = ProcessingStateManager(ProcessedEmailRepository(session))
-    guardrails = AgentGuardrails(auth)
+    harness = AgentHarness(auth)
     validator = ResponseValidator(auth)
+    toolkit = AgentToolKit(email, service, auth, validator)
 
     class FailingLLM(LLMProvider):
+        def decide_next_action(self, state, catalog):
+            raise MistralAPIError("simulated failure")
         def classify_email(self, s, sub, b):
             raise MistralAPIError("simulated failure")
         def generate_reply(self, s, sub, b, info):
             raise MistralAPIError("simulated failure")
 
     class BadReplyLLM(LLMProvider):
+        def decide_next_action(self, state, catalog):
+            if state.body is None:
+                return AgentDecision(
+                    action="CALL_TOOL",
+                    tool_name="get_email",
+                    tool_arguments={"email_id": state.email_id},
+                )
+            return AgentDecision(
+                action="CALL_TOOL",
+                tool_name="send_reply",
+                tool_arguments={
+                    "recipient": state.sender,
+                    "subject": "Re: x",
+                    "body": "",
+                },
+            )
         def classify_email(self, s, sub, b):
             return EmailClassification(
                 requires_action=True, is_product_or_service_inquiry=True,
                 category="product_pricing", product_names=["NovaSupport AI"],
             )
         def generate_reply(self, s, sub, b, info):
-            from app.agent.schemas import GeneratedReply
             return GeneratedReply(subject="Re: x", body="", information_used=[])
 
-    def build_agent(llm):
-        return AgentLoop(
-            email_provider=email, llm=llm, company_tools=tools,
-            state_manager=state, guardrails=guardrails, validator=validator,
-            processed_repo=ProcessedEmailRepository(session),
-            reply_repo=ReplyRepository(session),
-            agent_run_repo=AgentRunRepository(session),
+    def build_agent(llm, email_provider, sess):
+        tk = AgentToolKit(email_provider, service, auth, validator)
+        return AgentRuntime(
+            email_provider=email_provider, llm=llm, toolkit=tk, harness=AgentHarness(auth),
+            state_manager=ProcessingStateManager(ProcessedEmailRepository(sess)),
+            processed_repo=ProcessedEmailRepository(sess),
+            reply_repo=ReplyRepository(sess),
+            agent_run_repo=AgentRunRepository(sess),
         )
 
-    # Mistral/LLM failure on classification
+    # Mistral/LLM failure on decision
     email2 = MockEmailProvider(settings.mock_emails_path)
     session2 = db.get_session()
-    agent_fail = AgentLoop(
-        email_provider=email2, llm=FailingLLM(), company_tools=tools,
-        state_manager=ProcessingStateManager(ProcessedEmailRepository(session2)),
-        guardrails=AgentGuardrails(auth), validator=validator,
-        processed_repo=ProcessedEmailRepository(session2),
-        reply_repo=ReplyRepository(session2),
-        agent_run_repo=AgentRunRepository(session2),
-    )
+    agent_fail = build_agent(FailingLLM(), email2, session2)
     email2._emails = [email2._emails[0]]  # only mock-001
     r = agent_fail.run()
     step = r.steps[0]
     if step.status == "failed" and not step.reply_sent:
-        record("ErrorHandling", "llm_classification_failure", "PASS", step.error_message)
+        record("ErrorHandling", "llm_decision_failure", "PASS", step.error_message)
     else:
-        record("ErrorHandling", "llm_classification_failure", "FAIL", str(step.status))
+        record("ErrorHandling", "llm_decision_failure", "FAIL", str(step.status))
 
     # Empty reply validation — isolated DB
     db_path2 = PROJECT_ROOT / "data" / "qa_err2.db"
@@ -435,14 +445,7 @@ def check_error_handling():
     session3 = db2.get_session()
     email3 = MockEmailProvider(settings.mock_emails_path)
     email3._emails = [email3._emails[0]]
-    agent_bad = AgentLoop(
-        email_provider=email3, llm=BadReplyLLM(), company_tools=tools,
-        state_manager=ProcessingStateManager(ProcessedEmailRepository(session3)),
-        guardrails=AgentGuardrails(auth), validator=validator,
-        processed_repo=ProcessedEmailRepository(session3),
-        reply_repo=ReplyRepository(session3),
-        agent_run_repo=AgentRunRepository(session3),
-    )
+    agent_bad = build_agent(BadReplyLLM(), email3, session3)
     email3.reset_sent()
     r3 = agent_bad.run()
     session3.commit()
@@ -465,14 +468,7 @@ def check_error_handling():
     email4._emails = [email4._emails[0]]
     from app.llm.mock_provider import MockLLMProvider
     email4.send_email = lambda *a, **k: False
-    agent_send_fail = AgentLoop(
-        email_provider=email4, llm=MockLLMProvider(), company_tools=tools,
-        state_manager=ProcessingStateManager(ProcessedEmailRepository(session4)),
-        guardrails=AgentGuardrails(auth), validator=validator,
-        processed_repo=ProcessedEmailRepository(session4),
-        reply_repo=ReplyRepository(session4),
-        agent_run_repo=AgentRunRepository(session4),
-    )
+    agent_send_fail = build_agent(MockLLMProvider(), email4, session4)
     r4 = agent_send_fail.run()
     session4.commit()
     rec = ProcessedEmailRepository(session4).get("mock-001")

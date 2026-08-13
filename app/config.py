@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     gmail_token_path: str = "token.json"
     max_agent_steps: int = 50
     max_tool_calls: int = 10
+    max_agent_turns_per_email: int = 15
     log_level: str = "INFO"
 
     @property

@@ -1,23 +1,8 @@
-"""Explicit agent loop - the heart of the email handling agent.
+"""Explicit agent loop - LEGACY predetermined workflow.
 
-Each step is visible and documented. Deterministic decisions use code;
-probabilistic decisions delegate to the LLM.
-
-Agent Loop:
-1. Start run
-2. Check mailbox count
-3. List emails
-4. For each email:
-   a. Check if already processed (DETERMINISTIC)
-   b. Claim for processing (DETERMINISTIC, DB constraint)
-   c. Retrieve email
-   d. Classify with LLM (PROBABILISTIC)
-   e. Apply guardrails (DETERMINISTIC)
-   f. Retrieve authorized info via tools (DETERMINISTIC auth)
-   g. Generate reply with LLM (PROBABILISTIC)
-   h. Validate reply (DETERMINISTIC)
-   i. Send email (DETERMINISTIC)
-   j. Log and update state (DETERMINISTIC)
+DEPRECATED: Production entry point uses AgentRuntime (app/agent/runtime.py)
+with a genuine LLM-driven agentic loop. This module is retained for reference
+and comparison only.
 """
 
 import json

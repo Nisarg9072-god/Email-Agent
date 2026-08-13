@@ -12,12 +12,15 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from app.agent.prompts import (
+    AGENT_DECISION_SYSTEM_PROMPT,
+    AGENT_DECISION_USER_PROMPT,
     CLASSIFICATION_SYSTEM_PROMPT,
     CLASSIFICATION_USER_PROMPT,
     REPLY_SYSTEM_PROMPT,
     REPLY_USER_PROMPT,
 )
-from app.agent.schemas import EmailClassification, GeneratedReply
+from app.agent.schemas import AgentDecision, EmailClassification, GeneratedReply
+from app.agent.state import AgentState
 from app.llm.base import LLMProvider
 from app.llm.exceptions import (
     MistralAPIError,
@@ -173,6 +176,11 @@ class MistralProvider(LLMProvider):
             return exc
 
         return MistralAPIError(str(exc))
+
+    def decide_next_action(self, state: AgentState, tool_catalog: str) -> AgentDecision:
+        system = AGENT_DECISION_SYSTEM_PROMPT.format(tool_catalog=tool_catalog)
+        user = AGENT_DECISION_USER_PROMPT.format(state_context=state.to_llm_context())
+        return self._parse_structured(system, user, AgentDecision)
 
     def classify_email(
         self, sender: str, subject: str, body: str
