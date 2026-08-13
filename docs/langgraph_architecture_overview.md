@@ -4,7 +4,7 @@ This document explains LangGraph concepts, how they relate to the **current AI E
 
 > **Critical fact:** The current Email Agent does **not** use LangGraph.
 >
-> **On branch `feature/true-agentic-loop`:** Per-email orchestration is **`AgentRuntime`** (`app/agent/runtime.py`) with LLM-chosen tools via **`AgentDecision`**. The harness is **`AgentHarness`** (`app/harness/runtime.py`). Legacy **`AgentLoop`** (`app/agent/loop.py`) is deprecated.
+> **On branch `feature/true-agentic-loop` / `feature/continuous-agent-loop`:** Per-email orchestration is **`AgentRuntime`** (`app/agent/runtime.py`) with LLM-chosen tools via **`AgentDecision`**. The harness is **`AgentHarness`** (`app/harness/runtime.py`). Legacy **`AgentLoop`** (`app/agent/loop.py`) is deprecated.
 >
 > Diagrams below labeled **CURRENT (main / legacy)** describe the predetermined workflow. For the agentic architecture see [AGENT_WORKFLOW_DIAGRAM.md](AGENT_WORKFLOW_DIAGRAM.md) and [presentation.md](presentation.md).
 
@@ -15,9 +15,9 @@ This document explains LangGraph concepts, how they relate to the **current AI E
 | Question | Answer |
 |----------|--------|
 | Are incoming emails saved locally for later? | **No** — bodies stay in Gmail; agent fetches via API into memory only |
-| One run or continuous? | **One CLI batch** — `list_emails()` once, process all, exit |
-| What is stored in SQLite? | `email_id`, status, classification JSON, **outgoing reply** audit |
-| Duplicate prevention? | `processed_emails.email_id` PRIMARY KEY — skip on next run |
+| One run or continuous? | **Single batch** via `python -m app.main`, or **continuous polling** via `run_agent.py` / `AGENT_CONTINUOUS_MODE` |
+| What is stored in SQLite? | `email_id`, status, error/skip reason, **outgoing reply** audit |
+| Duplicate prevention? | `processed_emails.email_id` PRIMARY KEY + Gmail mark-read + retry limits |
 
 ---
 
@@ -71,7 +71,7 @@ LangGraph orchestrates **flow**; it does not replace **security guardrails**.
 
 The evaluation prototype prioritizes:
 
-1. **Explainability** — entire loop visible in `app/agent/loop.py`
+1. **Explainability** — entire loop visible in `app/agent/runtime.py`
 2. **Simplicity** — no framework magic for a 30-minute walkthrough
 3. **Testability** — direct method calls easy to unit test
 
@@ -84,10 +84,10 @@ LangGraph is documented here as a **future migration path**, not a current depen
 | Primitive | Description | Status in Email Agent |
 |-----------|-------------|----------------------|
 | **State** | Typed dict/object passed between nodes | **CURRENT** — `AgentStepResult`, DB records, dataclass fields |
-| **StateGraph** | Graph builder connecting nodes | **NOT USED** — `AgentLoop.run()` is the graph |
-| **Nodes** | Functions that transform state | **CURRENT** — `_process_email()` steps are implicit nodes |
-| **Edges** | Fixed transitions between nodes | **CURRENT** — sequential code in `_process_email()` |
-| **Conditional Edges** | Branch based on state | **CURRENT** — `if should_skip`, `if should_respond`, etc. |
+| **StateGraph** | Graph builder connecting nodes | **NOT USED** — `AgentRuntime.run()` + `_run_agentic_loop()` is the graph |
+| **Nodes** | Functions that transform state | **CURRENT** — harness validate, tool execute, finalize are implicit nodes |
+| **Edges** | Fixed transitions between nodes | **CURRENT** — turn loop in `_run_agentic_loop()` |
+| **Conditional Edges** | Branch based on state | **CURRENT** — `AgentDecision` type (CALL_TOOL vs FINAL), harness reject |
 | **START / END** | Graph entry and exit | **CURRENT** — `run()` start, return `AgentRunResult` |
 | **Tools** | Callable functions for agents | **CURRENT** — `CompanyDataTools` (app-orchestrated) |
 | **Tool Nodes** | LangGraph nodes that execute tools | **NOT USED** — tools called in Python, not LLM function-calling |
@@ -98,57 +98,44 @@ LangGraph is documented here as a **future migration path**, not a current depen
 
 ---
 
-## 3. Current Email Agent Workflow (Not LangGraph)
+## 3. Current Email Agent Workflow (AgentRuntime — Not LangGraph)
 
 ### CURRENT — Actual Implementation
 
-> **Standalone diagram doc:** Full structure with node-to-file mapping → [`AGENT_WORKFLOW_DIAGRAM.md`](AGENT_WORKFLOW_DIAGRAM.md)
+> **Standalone diagram doc:** [`AGENT_WORKFLOW_DIAGRAM.md`](AGENT_WORKFLOW_DIAGRAM.md)
 
 ```mermaid
 flowchart TD
-    START([AgentLoop.run]) --> COUNT[get_email_count]
-    COUNT --> LIST[list_emails]
-    LIST --> FOR_EACH{For each email_id}
+    START([AgentRuntime.run]) --> SCAN[list_emails + filter queue]
+    SCAN --> FOR_EACH{For each email_id}
 
     FOR_EACH --> SKIP_CHECK[ProcessingStateManager.should_skip]
-    SKIP_CHECK -->|Terminal state| SKIP[Return skipped]
+    SKIP_CHECK -->|Terminal| SKIP[Return skipped]
     SKIP --> FOR_EACH
 
     SKIP_CHECK -->|Not terminal| CLAIM[claim_for_processing]
     CLAIM -->|Failed| SKIP
-    CLAIM -->|Success| FETCH[get_email]
+    CLAIM -->|Success| LOOP{Agentic turn loop}
 
-    FETCH -->|None| FAIL_FETCH[mark_failed: email_not_found]
-    FAIL_FETCH --> FOR_EACH
+    LOOP --> LLM[decide_next_action → AgentDecision]
+    LLM --> NORM[normalize_decision]
+    NORM --> HARNESS[AgentHarness.validate_decision]
+    HARNESS -->|Invalid| FAIL[mark_failed]
+    FAIL --> FOR_EACH
 
-    FETCH --> CLASSIFY[MistralProvider.classify_email]
-    CLASSIFY -->|Exception| FAIL_CLASS[mark_failed: classification_failed]
-    FAIL_CLASS --> FOR_EACH
+    HARNESS -->|CALL_TOOL| TOOL[AgentToolKit.execute]
+    TOOL -->|Error| FAIL
+    TOOL --> LOOP
 
-    CLASSIFY --> GUARD[AgentGuardrails.should_respond_to_classification]
-    GUARD -->|No| SKIP_GUARD[mark_skipped]
-    SKIP_GUARD --> FOR_EACH
-
-    GUARD -->|Yes| TOOLS[CompanyDataTools.gather_information]
-    TOOLS --> GENERATE[MistralProvider.generate_reply]
-    GENERATE -->|Exception| FAIL_GEN[mark_failed: reply_generation_failed]
-    FAIL_GEN --> FOR_EACH
-
-    GENERATE --> VALIDATE[ResponseValidator.validate]
-    VALIDATE -->|Invalid| FAIL_VAL[mark_failed: validation_failed]
-    FAIL_VAL --> FOR_EACH
-
-    VALIDATE -->|Valid| SEND[EmailProvider.send_email]
-    SEND -->|Failed| FAIL_SEND[mark_failed: send_failed]
-    FAIL_SEND --> FOR_EACH
-
-    SEND -->|Success| DONE[mark_processed + log reply]
+    HARNESS -->|FINAL| DONE[mark processed/skipped/failed]
     DONE --> FOR_EACH
 
     FOR_EACH -->|Complete| END([Return AgentRunResult])
 ```
 
-**Source of truth:** `app/agent/loop.py` — methods `run()` and `_process_email()`
+**Source of truth:** `app/agent/runtime.py` — methods `run()` and `_run_agentic_loop()`
+
+Legacy predetermined flow: `app/agent/loop.py` (deprecated).
 
 ---
 
@@ -158,57 +145,58 @@ If this project were migrated to LangGraph, the mapping would be:
 
 | LangGraph Concept | Current Equivalent | File |
 |-------------------|-------------------|------|
-| Graph entry | `AgentLoop.run()` | `app/agent/loop.py` |
-| State | `AgentRunResult`, `AgentStepResult`, DB rows | `app/agent/schemas.py`, `app/db/models.py` |
+| Graph entry | `AgentRuntime.run()` | `app/agent/runtime.py` |
+| State | `AgentState`, `AgentStepResult`, DB rows | `app/agent/state.py`, `app/db/models.py` |
 | Node: check state | `ProcessingStateManager.should_skip()` | `app/harness/state.py` |
-| Node: claim | `ProcessingStateManager.claim()` | `app/harness/state.py` |
-| Node: classify | `llm.classify_email()` | `app/llm/mistral_provider.py` |
-| Conditional edge | `guardrails.should_respond_to_classification()` | `app/harness/guardrails.py` |
-| Node: tools | `company_tools.gather_information_for_classification()` | `app/tools/company_data_tools.py` |
-| Node: generate | `llm.generate_reply()` | `app/llm/mistral_provider.py` |
-| Node: validate | `validator.validate()` | `app/harness/validator.py` |
-| Node: send | `email_provider.send_email()` | `app/email/mock_provider.py` |
-| Graph exit | `return result` | `app/agent/loop.py` |
+| Node: claim | `ProcessedEmailRepository.claim_for_processing()` | `app/db/repositories.py` |
+| Node: LLM decide | `llm.decide_next_action()` | `app/llm/mistral_provider.py` |
+| Node: normalize | `normalize_decision()` | `app/agent/decision_normalize.py` |
+| Conditional edge | `AgentHarness.validate_decision()` | `app/harness/runtime.py` |
+| Node: tools | `AgentToolKit.execute()` | `app/tools/agent_toolkit.py` |
+| Node: validate send | `ResponseValidator.validate()` | `app/harness/validator.py` |
+| Node: send | `EmailProvider.send_email()` via tool | `app/email/gmail_provider.py` |
+| Graph exit | `return AgentRunResult` | `app/agent/runtime.py` |
 
 ---
 
-## 5. Node Workflow Architecture (Current)
+## 5. Node Workflow Architecture (AgentRuntime)
 
-Each step in `_process_email()` acts as an implicit "node":
+Each step in `_run_agentic_loop()` acts as an implicit "node":
 
 | Implicit Node | Purpose | Input | Output | State Change | Type |
 |---------------|---------|-------|--------|--------------|------|
-| **should_skip** | Duplicate check | `email_id` | skip bool + reason | None | Deterministic |
+| **should_skip** | Duplicate / terminal check | `email_id` | skip bool + reason | None | Deterministic |
 | **claim** | Atomic processing claim | `email_id` | success bool | DB → `processing` | Deterministic |
-| **fetch_email** | Retrieve content | `email_id` | `EmailMessage` | None | Deterministic |
-| **classify** | Semantic understanding | email text | `EmailClassification` | None | Probabilistic (Mistral) |
-| **guardrail_route** | Action decision | classification | respond bool | None | Deterministic |
-| **gather_company_data** | Authorized info retrieval | product/service names | info string | Tool log | Deterministic |
-| **generate_reply** | Compose response | email + info | `GeneratedReply` | None | Probabilistic (Mistral) |
-| **validate_reply** | Pre-send safety | reply fields | valid bool | None | Deterministic |
-| **send_email** | Deliver reply | reply + recipient | sent bool | `replies` row | Deterministic |
-| **finalize** | Mark complete | email_id | None | DB → `processed` | Deterministic |
+| **decide_next_action** | LLM chooses tool or FINAL | `AgentState` context | `AgentDecision` | None | Probabilistic (Mistral) |
+| **normalize_decision** | Repair malformed LLM output | `AgentDecision` | normalized decision | None | Deterministic |
+| **validate_decision** | Harness policy gate | decision + state | allow/reject | None | Deterministic |
+| **execute_tool** | Run authorized tool | tool name + args | tool result | `AgentState` append | Deterministic |
+| **validate_reply** | Pre-send safety (send_reply) | reply fields | valid bool | None | Deterministic |
+| **finalize** | Mark complete / failed / skipped | email_id + outcome | None | DB + Gmail mark-read | Deterministic |
 
 ```mermaid
 flowchart LR
     subgraph deterministic [Deterministic Nodes]
         N1[should_skip]
         N2[claim]
-        N3[fetch]
-        N5[guardrail_route]
-        N6[gather_data]
-        N8[validate]
-        N9[send]
-        N10[finalize]
+        N4[normalize]
+        N5[validate_decision]
+        N6[execute_tool]
+        N8[validate_reply]
+        N9[finalize]
     end
 
     subgraph probabilistic [Probabilistic Nodes]
-        N4[classify]
-        N7[generate_reply]
+        N3[decide_next_action]
     end
 
-    N1 --> N2 --> N3 --> N4 --> N5 --> N6 --> N7 --> N8 --> N9 --> N10
+    N1 --> N2 --> N3 --> N4 --> N5 --> N6
+    N6 --> N3
+    N5 -->|FINAL| N9
+    N6 -->|send_reply| N8 --> N9
 ```
+
+Legacy predetermined nodes (`classify`, `generate_reply` as fixed steps): see deprecated `app/agent/loop.py`.
 
 ---
 
@@ -307,14 +295,14 @@ Peer-to-peer patterns are difficult to audit, test, and secure — problematic f
 
 | Architecture | Complexity | Control | Auditability | Best For |
 |--------------|------------|---------|--------------|----------|
-| **Single Agent Loop (CURRENT)** | Low | High | High | Focused workflows, strict guardrails, prototypes |
+| **Single Agent Runtime (CURRENT)** | Low | High | High | Focused workflows, strict guardrails, prototypes |
 | **Supervisor Multi-Agent** | Medium | Medium | Medium | Specialized sub-tasks, team ownership |
 | **Hierarchical Subgraphs** | Medium | High | High | Modular sub-workflows within one product |
 | **Peer-to-Peer Network** | High | Low | Low | Research, exploratory multi-agent systems |
 
 ### Recommendation for This Project
 
-The assignment requirements — duplicate prevention, authorization, grounded replies, logging — are best served by a **single explicit agent loop** with deterministic harness components. Multi-agent patterns add coordination overhead without solving a current requirement.
+The assignment requirements — duplicate prevention, authorization, grounded replies, logging — are best served by a **single explicit AgentRuntime** with deterministic harness components. Multi-agent patterns add coordination overhead without solving a current requirement.
 
 ---
 
@@ -324,8 +312,9 @@ The assignment requirements — duplicate prevention, authorization, grounded re
 
 | Field / Object | Created By | Modified By | Consumed By | Persistent |
 |----------------|------------|-------------|-------------|------------|
-| `AgentRunResult` | `AgentLoop.run()` | Loop counters | CLI output | No |
-| `AgentStepResult` | `_process_email()` | Each step | CLI output, counters | No |
+| `AgentRunResult` | `AgentRuntime.run()` | Loop counters | CLI output | No |
+| `AgentState` | `_run_agentic_loop()` | Each tool turn | LLM context, finalize | No |
+| `AgentStepResult` | per-email outcome | Finalize | CLI output, counters | No |
 | `EmailClassification` | Mistral/MockLLM | — | Guardrails, tools, logging | Stored as JSON in DB on success |
 | `GeneratedReply` | Mistral/MockLLM | — | Validator, send, reply repo | Stored in `replies` table |
 | `CompanyDataTools._call_log` | Tool calls | Each tool invocation | Step result logging | No |
@@ -342,8 +331,9 @@ The assignment requirements — duplicate prevention, authorization, grounded re
 
 ```
 (new) → processing → processed   (success)
-                   → failed      (error)
+                   → failed      (error; retryable up to 2 attempts)
                    → skipped     (guardrail / no action)
+failed → processing              (reclaim for retry)
 ```
 
 Enforced in: `app/db/repositories.py` — `ALLOWED_TRANSITIONS`
@@ -352,32 +342,31 @@ Enforced in: `app/db/repositories.py` — `ALLOWED_TRANSITIONS`
 
 ## 11. Tool Flow (Current Implementation)
 
-Tools are **not** LangGraph ToolNodes. The agent loop orchestrates calls:
+Tools are **not** LangGraph ToolNodes. **`AgentRuntime`** orchestrates LLM-chosen tool calls via **`AgentToolKit`**:
 
 ```mermaid
 sequenceDiagram
-    participant Loop as AgentLoop
-    participant Class as EmailClassification
-    participant Tools as CompanyDataTools
+    participant Runtime as AgentRuntime
+    participant Mistral as MistralProvider
+    participant Harness as AgentHarness
+    participant Tools as AgentToolKit
     participant Auth as AuthorizationService
     participant Repo as CompanyRepository
 
-    Loop->>Class: product_names, service_names
-    Loop->>Tools: gather_information_for_classification()
-    loop Each product name
-        Tools->>Tools: call_tool(get_product_information)
-        Tools->>Auth: get_authorized_product()
-        Auth->>Repo: get_product_by_name()
-        Repo-->>Auth: full record (public + restricted)
-        Auth-->>Tools: filtered public fields only
-    end
-    Tools-->>Loop: authorized info string
-    Loop->>Loop: Pass string to Mistral generate_reply()
+    Runtime->>Mistral: decide_next_action(AgentState)
+    Mistral-->>Runtime: CALL_TOOL get_product_information
+    Runtime->>Harness: validate_decision()
+    Runtime->>Tools: execute(get_product_information, ...)
+    Tools->>Auth: get_authorized_product()
+    Auth->>Repo: get_product_by_name()
+    Repo-->>Auth: full record (public + restricted)
+    Auth-->>Tools: filtered public fields only
+    Tools-->>Runtime: tool result → AgentState
 ```
 
 ### How This Prevents Direct Database Access
 
-1. Mistral never calls tools — the loop does
+1. Mistral never calls tools directly — **`AgentHarness`** validates each `CALL_TOOL` decision first
 2. Tools call services, not SQL
 3. Authorization strips restricted fields before string reaches Mistral
 4. Forbidden tool names are blocked in `CompanyDataTools.call_tool()`
@@ -488,22 +477,22 @@ Invalid reply → `mark_failed(validation_error)` → reply saved with `validati
 ### CURRENT — Single Email Agent (Implemented)
 
 ```
-CLI Trigger
+CLI Trigger (run_agent.py / app.main)
     ↓
-AgentLoop (explicit Python)
+AgentRuntime (LLM agentic loop per email)
     ↓
-Harness (guardrails + state + validation)
+AgentHarness (validate decisions + limits)
     ↓
-Mistral AI (classify + generate)
+Mistral AI (decide_next_action + generate_reply fallback)
     ↓
-CompanyDataTools (authorized data)
+AgentToolKit (get_email, get_product_information, send_reply)
     ↓
 EmailProvider (mock / gmail)
     ↓
-SQLite (state + audit)
+SQLite (state + audit) + Gmail mark-read
 ```
 
-**Files:** `app/agent/loop.py`, `app/harness/`, `app/llm/mistral_provider.py`
+**Files:** `app/agent/runtime.py`, `app/harness/runtime.py`, `app/llm/mistral_provider.py`, `app/email/gmail_provider.py`
 
 ### FUTURE — LangGraph Single Agent
 
@@ -545,21 +534,21 @@ Study sequence mapped to this Email Agent:
 
 | Step | LangGraph Concept | Email Agent Equivalent |
 |------|-------------------|------------------------|
-| 1 | **State** | `AgentStepResult`, `processed_emails` rows |
-| 2 | **StateGraph** | `AgentLoop.run()` — would become `StateGraph()` |
-| 3 | **Nodes** | Each step in `_process_email()` |
-| 4 | **Edges** | Sequential code flow between steps |
-| 5 | **Conditional edges** | `if should_skip`, `if should_respond`, `if is_valid` |
-| 6 | **Tool calling** | `CompanyDataTools.call_tool()` — app-orchestrated today |
-| 7 | **Agent loop** | `for summary in summaries: _process_email()` |
-| 8 | **Persistence** | SQLite `processed_emails` — checkpointing would add mid-run resume |
+| 1 | **State** | `AgentState`, `AgentStepResult`, `processed_emails` rows |
+| 2 | **StateGraph** | `AgentRuntime.run()` + `_run_agentic_loop()` — would become `StateGraph()` |
+| 3 | **Nodes** | `decide_next_action`, `normalize_decision`, harness validate, tool execute, finalize |
+| 4 | **Edges** | Turn loop until `FINAL` or harness stop |
+| 5 | **Conditional edges** | `AgentDecision.type`, harness reject, retry reclaim |
+| 6 | **Tool calling** | `AgentToolKit.execute()` — LLM chooses via `decide_next_action` |
+| 7 | **Agent loop** | Outer mailbox loop + inner per-email turn loop |
+| 8 | **Persistence** | SQLite + Gmail mark-read; checkpointing would add mid-run resume |
 | 9 | **Subgraphs** | Could extract reply pipeline into subgraph (future) |
 | 10 | **Multi-agent patterns** | Supervisor / hierarchical / P2P — all future |
 | 11 | **Evals** | `evals/` — unchanged by LangGraph; still needed for Mistral quality |
 
 ### Recommended Exercise
 
-Refactor `_process_email()` into a LangGraph `StateGraph` while keeping:
+Refactor `_run_agentic_loop()` into a LangGraph `StateGraph` while keeping:
 
 - All harness components unchanged
 - All guardrails deterministic
@@ -575,10 +564,11 @@ This would validate understanding without changing security properties.
 | Question | Answer |
 |----------|--------|
 | Does this project use LangGraph? | **No** |
-| What orchestrates the agent? | `AgentLoop` in `app/agent/loop.py` |
-| What LLM is used? | Mistral AI (`MistralProvider`) |
-| Are LangGraph diagrams in this doc current? | Only §3, §5, §10–§14 reflect current code |
-| Should we add LangGraph now? | Optional future improvement — not required for assignment |
+| What orchestrates the agent? | **`AgentRuntime`** in `app/agent/runtime.py` |
+| What LLM is used? | Mistral AI (`MistralProvider.decide_next_action`) |
+| Continuous polling? | **`run_agent.py`** or `AGENT_CONTINUOUS_MODE=true` |
+| Are legacy AgentLoop diagrams current? | **No** — see `AGENT_WORKFLOW_DIAGRAM.md` |
+| Should we add LangGraph now? | Optional future improvement — not required |
 
 For full project documentation, see [README.md](../README.md).
 

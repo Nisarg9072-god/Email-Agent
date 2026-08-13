@@ -13,26 +13,30 @@
 
 **Constraints:** Deterministic safety for auth/idempotency; probabilistic LLM for language understanding and **tool selection**.
 
+**Production extras:** Gmail OAuth integration, continuous inbox polling, retry limits for failed emails.
+
 ---
 
 ## Slide 2 — Agentic Architecture
 
 ```mermaid
 flowchart TD
-    CLI[python -m app.main] --> HARNESS[AgentHarness]
-    HARNESS --> RUNTIME[AgentRuntime]
-    RUNTIME --> LOOP{Agentic loop per email}
+    CLI[run_agent.py / app.main] --> RUNTIME[AgentRuntime]
+    RUNTIME --> FILTER[Gmail queue filter<br/>new / retry / cleanup]
+    FILTER --> LOOP{Agentic loop per email}
     LOOP --> STATE[AgentState]
-    STATE --> LLM[Mistral / Mock LLM]
-    LLM --> DECIDE[AgentDecision CALL_TOOL or FINAL]
-    DECIDE --> HARNESS
+    STATE --> LLM[Mistral decide_next_action]
+    LLM --> NORM[normalize_decision]
+    NORM --> HARNESS[AgentHarness validate]
     HARNESS -->|allowed| TOOL[AgentToolKit]
     TOOL --> RESULT[Tool result → state]
     RESULT --> LOOP
-    DECIDE -->|FINAL| STOP[Mark processed / skipped]
+    HARNESS -->|FINAL| STOP[Mark processed / skipped / failed]
 ```
 
-**Why this is a genuine agentic loop:** Each turn the **LLM** reads current state + tool history and chooses the **next** action. Python does not hardcode tool order (unlike legacy `AgentLoop`).
+**Why this is a genuine agentic loop:** Each turn the **LLM** reads current state + tool history and chooses the **next** action. Python does not hardcode tool order after claim.
+
+**Continuous mode:** Outer poll loop checks inbox every N seconds until Ctrl+C.
 
 ---
 
@@ -47,7 +51,9 @@ flowchart TD
 | Duplicate emails | `ProcessingStateManager` + SQLite PK |
 | Turn / tool limits | `max_agent_turns_per_email`, `max_tool_calls` |
 | Reply validation | `ResponseValidator` before `send_reply` executes |
-| Logging | Decision trace on each `AgentStepResult` |
+| Retry limits | Max 2 attempts; legacy failures not retried forever |
+| Gmail cleanup | Batch mark-read for already-handled unread IDs |
+| Decision repair | `decision_normalize.py` for malformed Mistral output |
 
 **Boundary:** Harness **permits or denies** LLM decisions — it does **not** choose business actions.
 
@@ -64,22 +70,29 @@ flowchart TD
 | Reply wording in `send_reply` | Reply validation before send |
 | Skip vs act (via FINAL) | Max turns / max tool calls |
 | Inquiry understanding | SQLite state transitions |
+| | Gmail mark-as-read, queue filtering |
+| | Retry attempt counting |
+| | `normalize_decision` fallbacks |
 
 ---
 
-## Slide 5 — Testing & Evaluation
+## Slide 5 — Testing, Ops & Future
 
-**Unit tests (46+):** harness validation, duplicate guard, tool auth, agent runtime integration, mock agent decisions — **no live LLM**.
+**Unit tests (71):** harness, duplicate guard, agent runtime, decision normalize, Gmail helpers, failure retry policy — **no live LLM required for most**.
 
-**Evals:** classification accuracy, reply groundedness, **agent decision accuracy** (tool selection given state).
+**Evals:** classification accuracy, reply groundedness, agent decision accuracy.
 
 **Run:**
 ```bash
 pytest
 python -m evals.run_evals
+python run_agent.py              # continuous Gmail polling
+python -m app.main               # single cycle
 python scripts/qa_verify.py
 ```
 
-**Limitations / future:** Mailbox-level agentic discovery (LLM calls `list_emails`); LangGraph optional migration; production scheduler not included.
+**Limitations:** Mailbox discovery not LLM-driven; Mistral output sometimes needs normalize; SQLite single-writer.
 
-**Design defense:** We traded predetermined workflow for **LLM-driven tool loops** while keeping safety **outside** the model — the pattern production agents use for grounded, auditable automation.
+**Future:** Human-in-the-loop approval, LangGraph optional migration, PostgreSQL, observability dashboard.
+
+**Design defense:** We use **LLM-driven tool loops** with safety **outside** the model — the pattern production agents use for grounded, auditable automation.
