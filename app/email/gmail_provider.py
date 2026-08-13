@@ -16,14 +16,27 @@ from app.email.base import EmailMessage, EmailProvider, EmailSummary
 
 logger = logging.getLogger(__name__)
 
+# Default: inbox unread only. Override via GMAIL_QUERY in .env.
+DEFAULT_GMAIL_QUERY = "in:inbox is:unread"
+
 
 class GmailEmailProvider(EmailProvider):
     """Gmail API integration. Falls back gracefully if credentials unavailable."""
 
-    def __init__(self, credentials_path: str, token_path: str):
+    def __init__(
+        self,
+        credentials_path: str,
+        token_path: str,
+        query: str = DEFAULT_GMAIL_QUERY,
+        max_messages_per_run: int = 50,
+    ):
         self._credentials_path = credentials_path
         self._token_path = token_path
+        self._query = query or DEFAULT_GMAIL_QUERY
+        self._max_messages = max(1, max_messages_per_run)
         self._service = None
+        self._unread_refs_cache: list[dict] | None = None
+        self._has_more_unread = False
 
     def _get_service(self):
         if self._service is not None:
@@ -62,34 +75,69 @@ class GmailEmailProvider(EmailProvider):
         self._service = build("gmail", "v1", credentials=creds)
         return self._service
 
-    def get_email_count(self) -> int:
+    def _list_matching_message_refs(self, *, refresh: bool = False) -> list[dict]:
+        """Paginate Gmail messages.list and return accurate unread refs (not an estimate)."""
+        if self._unread_refs_cache is not None and not refresh:
+            return self._unread_refs_cache
+
         service = self._get_service()
-        result = service.users().messages().list(userId="me", q="is:unread").execute()
-        return result.get("resultSizeEstimate", 0)
+        refs: list[dict] = []
+        page_token: str | None = None
+        self._has_more_unread = False
+
+        while len(refs) < self._max_messages:
+            kwargs: dict = {"userId": "me", "q": self._query, "maxResults": 500}
+            if page_token:
+                kwargs["pageToken"] = page_token
+            try:
+                result = service.users().messages().list(**kwargs).execute()
+            except Exception as exc:
+                logger.exception("Gmail messages.list failed for query=%r", self._query)
+                raise RuntimeError(f"Gmail list failed: {exc}") from exc
+            batch = result.get("messages", [])
+            refs.extend(batch)
+            page_token = result.get("nextPageToken")
+            if len(refs) >= self._max_messages:
+                refs = refs[: self._max_messages]
+                self._has_more_unread = bool(page_token) or len(batch) > self._max_messages
+                break
+            if not page_token:
+                break
+
+        self._unread_refs_cache = refs
+        if self._has_more_unread:
+            logger.warning(
+                "Gmail query=%r has MORE than %d unread match(es); "
+                "processing first %d only (raise GMAIL_MAX_MESSAGES_PER_RUN or mark mail read in Gmail)",
+                self._query,
+                self._max_messages,
+                len(refs),
+            )
+        else:
+            logger.info(
+                "Gmail query=%r matched %d message(s)",
+                self._query,
+                len(refs),
+            )
+        return refs
+
+    def get_email_count(self) -> int:
+        return len(self._list_matching_message_refs())
 
     def list_emails(self) -> list[EmailSummary]:
-        service = self._get_service()
-        result = service.users().messages().list(userId="me", q="is:unread").execute()
-        messages = result.get("messages", [])
-        summaries = []
-        for msg in messages:
-            detail = (
-                service.users()
-                .messages()
-                .get(userId="me", id=msg["id"], format="metadata")
-                .execute()
-            )
-            headers = {
-                h["name"]: h["value"]
-                for h in detail.get("payload", {}).get("headers", [])
-            }
+        """Return unread message IDs only — sender/subject loaded later via get_email tool."""
+        summaries: list[EmailSummary] = []
+
+        for msg in self._list_matching_message_refs():
             summaries.append(
                 EmailSummary(
                     email_id=msg["id"],
-                    sender=headers.get("From", ""),
-                    subject=headers.get("Subject", ""),
+                    sender="",
+                    subject="",
                 )
             )
+
+        logger.info("Gmail: prepared %d message(s) for agent processing", len(summaries))
         return summaries
 
     def get_email(self, email_id: str) -> EmailMessage | None:
@@ -143,16 +191,51 @@ class GmailEmailProvider(EmailProvider):
             return False
 
     @staticmethod
-    def _extract_body(payload: dict) -> str:
-        if "body" in payload and payload["body"].get("data"):
-            import base64
+    def _decode_body_data(data: str) -> str:
+        import base64
 
-            return base64.urlsafe_b64decode(payload["body"]["data"]).decode()
+        return base64.urlsafe_b64decode(data).decode(errors="replace")
+
+    @staticmethod
+    def _html_to_text(html: str) -> str:
+        import re
+
+        text = re.sub(
+            r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE
+        )
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
+    @classmethod
+    def _collect_text_parts(cls, payload: dict) -> tuple[str, str]:
+        """Return (plain_text, html_text) from a Gmail message payload (recursive)."""
+        plain_parts: list[str] = []
+        html_parts: list[str] = []
+
+        mime = payload.get("mimeType", "")
+        body_data = payload.get("body", {}).get("data", "")
+        if body_data:
+            decoded = cls._decode_body_data(body_data)
+            if mime == "text/plain":
+                plain_parts.append(decoded)
+            elif mime == "text/html":
+                html_parts.append(decoded)
+
         for part in payload.get("parts", []):
-            if part.get("mimeType") == "text/plain":
-                import base64
+            p, h = cls._collect_text_parts(part)
+            if p:
+                plain_parts.append(p)
+            if h:
+                html_parts.append(h)
 
-                data = part.get("body", {}).get("data", "")
-                if data:
-                    return base64.urlsafe_b64decode(data).decode()
+        return "\n".join(plain_parts), "\n".join(html_parts)
+
+    @classmethod
+    def _extract_body(cls, payload: dict) -> str:
+        plain, html = cls._collect_text_parts(payload)
+        if plain.strip():
+            return plain.strip()
+        if html.strip():
+            return cls._html_to_text(html)
         return ""

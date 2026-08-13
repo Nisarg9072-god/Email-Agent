@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{DATA_DIR / 'agent.db'}"
     gmail_credentials_path: str = "credentials.json"
     gmail_token_path: str = "token.json"
+    # Gmail search query for messages to process (must match Gmail search syntax)
+    gmail_query: str = "in:inbox is:unread"
+    # Max Gmail messages to list per run (avoids fetching thousands of unread IDs/metadata)
+    gmail_max_messages_per_run: int = 50
     max_agent_steps: int = 50
     max_tool_calls: int = 10
     max_agent_turns_per_email: int = 15

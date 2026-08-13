@@ -26,6 +26,8 @@ def create_email_provider(settings: Settings) -> EmailProvider:
         return GmailEmailProvider(
             credentials_path=settings.gmail_credentials_path,
             token_path=settings.gmail_token_path,
+            query=settings.gmail_query,
+            max_messages_per_run=settings.gmail_max_messages_per_run,
         )
     return MockEmailProvider(settings.mock_emails_path)
 
