@@ -2,7 +2,7 @@
 
 import logging
 
-from app.db.repositories import ProcessedEmailRepository
+from app.db.repositories import ProcessedEmailRepository, is_reclaimed_for_retry
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,9 @@ class ProcessingStateManager:
             return True, reason
 
         if record.status == "processing":
+            if is_reclaimed_for_retry(record.error_message):
+                return False, None
+            logger.info("Skipping email %s: already_processing", email_id)
             return True, "already_processing"
 
         return False, None

@@ -16,14 +16,31 @@ from app.email.base import EmailMessage, EmailProvider, EmailSummary
 
 logger = logging.getLogger(__name__)
 
+# Default: inbox unread only. Override via GMAIL_QUERY in .env.
+DEFAULT_GMAIL_QUERY = "in:inbox is:unread"
+
 
 class GmailEmailProvider(EmailProvider):
     """Gmail API integration. Falls back gracefully if credentials unavailable."""
 
-    def __init__(self, credentials_path: str, token_path: str):
+    def __init__(
+        self,
+        credentials_path: str,
+        token_path: str,
+        query: str = DEFAULT_GMAIL_QUERY,
+        max_messages_per_run: int = 50,
+        unread_scan_limit: int = 100,
+        mark_read_after_processing: bool = True,
+    ):
         self._credentials_path = credentials_path
         self._token_path = token_path
+        self._query = query or DEFAULT_GMAIL_QUERY
+        self._max_messages = max(1, max_messages_per_run)
+        self._scan_limit = max(self._max_messages, unread_scan_limit)
+        self._mark_read_after_processing = mark_read_after_processing
         self._service = None
+        self._unread_refs_cache: list[dict] | None = None
+        self._has_more_unread = False
 
     def _get_service(self):
         if self._service is not None:
@@ -62,34 +79,71 @@ class GmailEmailProvider(EmailProvider):
         self._service = build("gmail", "v1", credentials=creds)
         return self._service
 
-    def get_email_count(self) -> int:
+    def _list_matching_message_refs(
+        self, *, max_fetch: int | None = None, refresh: bool = False
+    ) -> list[dict]:
+        """Paginate Gmail messages.list up to max_fetch IDs (accurate, not estimate)."""
+        fetch_limit = max_fetch if max_fetch is not None else self._scan_limit
+        if self._unread_refs_cache is not None and not refresh and max_fetch is None:
+            return self._unread_refs_cache
+
         service = self._get_service()
-        result = service.users().messages().list(userId="me", q="is:unread").execute()
-        return result.get("resultSizeEstimate", 0)
+        refs: list[dict] = []
+        page_token: str | None = None
+        self._has_more_unread = False
+
+        while len(refs) < fetch_limit:
+            kwargs: dict = {"userId": "me", "q": self._query, "maxResults": 500}
+            if page_token:
+                kwargs["pageToken"] = page_token
+            try:
+                result = service.users().messages().list(**kwargs).execute()
+            except Exception as exc:
+                logger.exception("Gmail messages.list failed for query=%r", self._query)
+                raise RuntimeError(f"Gmail list failed: {exc}") from exc
+            batch = result.get("messages", [])
+            refs.extend(batch)
+            page_token = result.get("nextPageToken")
+            if len(refs) >= fetch_limit:
+                refs = refs[:fetch_limit]
+                self._has_more_unread = bool(page_token) or len(batch) > fetch_limit
+                break
+            if not page_token:
+                break
+
+        self._unread_refs_cache = refs
+        if self._has_more_unread:
+            logger.warning(
+                "Gmail query=%r has MORE than %d unread match(es) in this scan "
+                "(increase GMAIL_UNREAD_SCAN_LIMIT or mark mail read in Gmail)",
+                self._query,
+                fetch_limit,
+            )
+        else:
+            logger.info(
+                "Gmail query=%r scanned %d unread message(s)",
+                self._query,
+                len(refs),
+            )
+        return refs
+
+    def get_email_count(self) -> int:
+        return len(self._list_matching_message_refs(max_fetch=self._scan_limit, refresh=True))
 
     def list_emails(self) -> list[EmailSummary]:
-        service = self._get_service()
-        result = service.users().messages().list(userId="me", q="is:unread").execute()
-        messages = result.get("messages", [])
-        summaries = []
-        for msg in messages:
-            detail = (
-                service.users()
-                .messages()
-                .get(userId="me", id=msg["id"], format="metadata")
-                .execute()
-            )
-            headers = {
-                h["name"]: h["value"]
-                for h in detail.get("payload", {}).get("headers", [])
-            }
+        """Return unread IDs from a wide scan — runtime filters/prioritizes new mail."""
+        summaries: list[EmailSummary] = []
+
+        for msg in self._list_matching_message_refs(max_fetch=self._scan_limit, refresh=True):
             summaries.append(
                 EmailSummary(
                     email_id=msg["id"],
-                    sender=headers.get("From", ""),
-                    subject=headers.get("Subject", ""),
+                    sender="",
+                    subject="",
                 )
             )
+
+        logger.info("Gmail: prepared %d message(s) for agent processing", len(summaries))
         return summaries
 
     def get_email(self, email_id: str) -> EmailMessage | None:
@@ -109,11 +163,28 @@ class GmailEmailProvider(EmailProvider):
             h["name"]: h["value"]
             for h in detail.get("payload", {}).get("headers", [])
         }
-        body = self._extract_body(detail.get("payload", {}))
+        sender = (
+            headers.get("From")
+            or headers.get("Reply-To")
+            or headers.get("Sender")
+            or ""
+        )
+        body = self._extract_body(service, email_id, detail.get("payload", {}))
+        if not body.strip():
+            body = (detail.get("snippet") or "").strip()
+            if body:
+                logger.info(
+                    "Gmail message %s: using API snippet as body fallback", email_id
+                )
+        if not body.strip() and headers.get("Subject"):
+            body = headers["Subject"]
+            logger.info(
+                "Gmail message %s: using subject as body fallback", email_id
+            )
 
         return EmailMessage(
             email_id=email_id,
-            sender=headers.get("From", ""),
+            sender=sender,
             recipient=headers.get("To", ""),
             subject=headers.get("Subject", ""),
             body=body,
@@ -142,17 +213,127 @@ class GmailEmailProvider(EmailProvider):
             logger.exception("Failed to send email to %s", to)
             return False
 
+    def mark_as_read(self, email_id: str) -> bool:
+        """Remove UNREAD label in Gmail so the message is not picked up on the next run."""
+        if not self._mark_read_after_processing:
+            return True
+        try:
+            service = self._get_service()
+            service.users().messages().modify(
+                userId="me",
+                id=email_id,
+                body={"removeLabelIds": ["UNREAD"]},
+            ).execute()
+            logger.info("Gmail: marked message %s as read", email_id)
+            return True
+        except Exception:
+            logger.exception("Failed to mark Gmail message %s as read", email_id)
+            return False
+
+    def mark_many_as_read(self, email_ids: list[str]) -> int:
+        """Batch-remove UNREAD label (Gmail allows up to 1000 IDs per call)."""
+        if not email_ids or not self._mark_read_after_processing:
+            return 0
+        service = self._get_service()
+        marked = 0
+        for i in range(0, len(email_ids), 1000):
+            chunk = email_ids[i : i + 1000]
+            try:
+                service.users().messages().batchModify(
+                    userId="me",
+                    body={"ids": chunk, "removeLabelIds": ["UNREAD"]},
+                ).execute()
+                marked += len(chunk)
+            except Exception:
+                logger.exception(
+                    "Gmail batchModify failed for %d message(s)", len(chunk)
+                )
+                for email_id in chunk:
+                    if self.mark_as_read(email_id):
+                        marked += 1
+        if marked:
+            logger.info("Gmail: batch marked %d message(s) as read", marked)
+        return marked
+
     @staticmethod
-    def _extract_body(payload: dict) -> str:
-        if "body" in payload and payload["body"].get("data"):
-            import base64
+    def _decode_body_data(data: str) -> str:
+        import base64
 
-            return base64.urlsafe_b64decode(payload["body"]["data"]).decode()
+        return base64.urlsafe_b64decode(data).decode(errors="replace")
+
+    @staticmethod
+    def _html_to_text(html: str) -> str:
+        import re
+
+        text = re.sub(
+            r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE
+        )
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
+    @classmethod
+    def _collect_text_parts(
+        cls, service, message_id: str, payload: dict
+    ) -> tuple[str, str]:
+        """Return (plain_text, html_text) from a Gmail message payload (recursive)."""
+        plain_parts: list[str] = []
+        html_parts: list[str] = []
+
+        mime = payload.get("mimeType", "")
+        body_meta = payload.get("body", {})
+        body_data = body_meta.get("data", "")
+        if body_data:
+            decoded = cls._decode_body_data(body_data)
+            if mime == "text/plain":
+                plain_parts.append(decoded)
+            elif mime == "text/html":
+                html_parts.append(decoded)
+        elif body_meta.get("attachmentId") and mime.startswith("text/"):
+            decoded = cls._fetch_attachment_text(
+                service, message_id, body_meta["attachmentId"]
+            )
+            if decoded:
+                if mime == "text/plain":
+                    plain_parts.append(decoded)
+                elif mime == "text/html":
+                    html_parts.append(decoded)
+
         for part in payload.get("parts", []):
-            if part.get("mimeType") == "text/plain":
-                import base64
+            p, h = cls._collect_text_parts(service, message_id, part)
+            if p:
+                plain_parts.append(p)
+            if h:
+                html_parts.append(h)
 
-                data = part.get("body", {}).get("data", "")
-                if data:
-                    return base64.urlsafe_b64decode(data).decode()
+        return "\n".join(plain_parts), "\n".join(html_parts)
+
+    @classmethod
+    def _fetch_attachment_text(cls, service, message_id: str, attachment_id: str) -> str:
+        try:
+            att = (
+                service.users()
+                .messages()
+                .attachments()
+                .get(userId="me", messageId=message_id, id=attachment_id)
+                .execute()
+            )
+            data = att.get("data")
+            if data:
+                return cls._decode_body_data(data)
+        except Exception:
+            logger.exception(
+                "Failed to fetch Gmail attachment %s for message %s",
+                attachment_id,
+                message_id,
+            )
+        return ""
+
+    @classmethod
+    def _extract_body(cls, service, message_id: str, payload: dict) -> str:
+        plain, html = cls._collect_text_parts(service, message_id, payload)
+        if plain.strip():
+            return plain.strip()
+        if html.strip():
+            return cls._html_to_text(html)
         return ""

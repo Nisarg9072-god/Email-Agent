@@ -1,5 +1,7 @@
 """Pydantic schemas for agent inputs/outputs."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -47,6 +49,34 @@ class ToolCallRequest(BaseModel):
     arguments: dict = Field(default_factory=dict)
 
 
+class AgentFinalOutput(BaseModel):
+    """Structured outcome when the agent selects action=FINAL."""
+
+    outcome: Literal["completed", "skip", "no_action"] = Field(
+        description="completed=done after reply or explicit finish; skip=no reply needed"
+    )
+    message: str = Field(default="", description="Brief explanation of final decision")
+    skip_reason: str | None = Field(default=None)
+
+
+class AgentDecision(BaseModel):
+    """Structured LLM decision for the agentic loop — one step per turn."""
+
+    action: Literal["CALL_TOOL", "FINAL"] = Field(
+        description="CALL_TOOL to invoke a registered tool, FINAL to stop the agent loop"
+    )
+    tool_name: str | None = Field(
+        default=None, description="Required when action=CALL_TOOL"
+    )
+    tool_arguments: dict = Field(
+        default_factory=dict, description="Arguments for the selected tool"
+    )
+    final_output: AgentFinalOutput | None = Field(
+        default=None, description="Required when action=FINAL"
+    )
+    reasoning: str = Field(default="", description="Why this action was chosen")
+
+
 class AgentStepResult(BaseModel):
     """Result of processing a single email."""
 
@@ -57,3 +87,5 @@ class AgentStepResult(BaseModel):
     skip_reason: str | None = None
     error_message: str | None = None
     tool_calls: list[str] = Field(default_factory=list)
+    agent_turns: int = 0
+    decision_trace: list[str] = Field(default_factory=list)

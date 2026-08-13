@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.agent.schemas import EmailClassification, GeneratedReply
+from app.agent.schemas import AgentDecision, EmailClassification, GeneratedReply
+from app.agent.state import AgentState
 from app.llm.exceptions import (
     MistralAuthError,
     MistralInvalidResponseError,
@@ -25,6 +26,25 @@ def _make_parsed_response(parsed_obj):
 
 
 class TestMistralProvider:
+    def test_decide_next_action_success(self):
+        mock_client = MagicMock()
+        expected = AgentDecision(
+            action="CALL_TOOL",
+            tool_name="get_email",
+            tool_arguments={"email_id": "e1"},
+            reasoning="fetch email",
+        )
+        mock_client.chat.parse.return_value = _make_parsed_response(expected)
+        provider = MistralProvider(
+            api_key="test-key",
+            model="mistral-small-latest",
+            client=mock_client,
+        )
+        state = AgentState(email_id="e1")
+        result = provider.decide_next_action(state, "- get_email: fetch")
+        assert result.action == "CALL_TOOL"
+        assert result.tool_name == "get_email"
+
     def test_classify_email_success(self):
         mock_client = MagicMock()
         expected = EmailClassification(

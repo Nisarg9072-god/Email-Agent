@@ -9,7 +9,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.agent.schemas import EmailClassification
+from app.agent.schemas import AgentDecision, EmailClassification
+from app.agent.state import AgentState
 from app.company.authorization import AuthorizationService
 from app.company.repository import CompanyRepository
 from app.company.service import CompanyDataService
@@ -45,11 +46,23 @@ class ReplyEvalResult:
     issues: list[str] = field(default_factory=list)
 
 
+class AgentDecisionEvalResult:
+    def __init__(self, case_id: str, state_description: str, expected_tool: str | None,
+                 expected_action: str, actual: AgentDecision, match: bool):
+        self.case_id = case_id
+        self.state_description = state_description
+        self.expected_tool = expected_tool
+        self.expected_action = expected_action
+        self.actual = actual
+        self.match = match
+
+
 @dataclass
 class EvalReport:
     total: int = 0
     classification_results: list[ClassificationEvalResult] = field(default_factory=list)
     reply_results: list[ReplyEvalResult] = field(default_factory=list)
+    agent_decision_results: list = field(default_factory=list)
 
     @property
     def requires_action_accuracy(self) -> float:
@@ -71,6 +84,12 @@ class EvalReport:
             return 0.0
         matches = sum(1 for r in self.classification_results if r.category_match)
         return matches / len(self.classification_results)
+
+    @property
+    def agent_decision_accuracy(self) -> float:
+        if not self.agent_decision_results:
+            return 0.0
+        return sum(1 for r in self.agent_decision_results if r.match) / len(self.agent_decision_results)
 
     @property
     def reply_groundedness_rate(self) -> float:
@@ -170,11 +189,55 @@ class Evaluator:
             )
         return results
 
+    def evaluate_agent_decisions(self) -> list:
+        """Probabilistic eval: does LLM choose the expected next tool/action?"""
+        from app.tools.registry import tools_for_llm_prompt
+
+        catalog = tools_for_llm_prompt()
+        cases = [
+            ("dec-001", AgentState(email_id="e1"), "CALL_TOOL", "get_email"),
+            (
+                "dec-002",
+                AgentState(
+                    email_id="e2",
+                    sender="a@b.com",
+                    subject="NovaAnalytics",
+                    body="Does NovaAnalytics integrate with Snowflake?",
+                ),
+                "CALL_TOOL",
+                "get_product_information",
+            ),
+            (
+                "dec-003",
+                AgentState(
+                    email_id="e3",
+                    sender="s@spam.com",
+                    subject="Winner",
+                    body="You won lottery click here",
+                ),
+                "FINAL",
+                None,
+            ),
+        ]
+        results = []
+        for case_id, state, exp_action, exp_tool in cases:
+            actual = self._llm.decide_next_action(state, catalog)
+            match = actual.action == exp_action and (
+                exp_tool is None or actual.tool_name == exp_tool
+            )
+            results.append(
+                AgentDecisionEvalResult(
+                    case_id, state.to_llm_context()[:80], exp_tool, exp_action, actual, match
+                )
+            )
+        return results
+
     def run(self) -> EvalReport:
         emails = self.load_dataset()
         report = EvalReport(total=len(emails))
         report.classification_results = self.evaluate_classification(emails)
         report.reply_results = self.evaluate_replies(emails)
+        report.agent_decision_results = self.evaluate_agent_decisions()
         return report
 
     def print_report(self, report: EvalReport) -> None:
@@ -185,6 +248,7 @@ class Evaluator:
         print(f"Requires action accuracy:  {report.requires_action_accuracy:.1%}")
         print(f"Inquiry detection accuracy:{report.inquiry_detection_accuracy:.1%}")
         print(f"Category accuracy:         {report.category_accuracy:.1%}")
+        print(f"Agent decision accuracy:   {report.agent_decision_accuracy:.1%}")
         print(f"Reply groundedness rate:   {report.reply_groundedness_rate:.1%}")
         print("-" * 60)
 

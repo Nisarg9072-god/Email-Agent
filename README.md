@@ -13,7 +13,7 @@ Built as a technical evaluation prototype for NovaAI (fictional company) — des
 3. [Requirements](#3-requirements)
 4. [High-Level System Architecture](#4-high-level-system-architecture)
 5. [Core Agent Workflow](#5-core-agent-workflow)
-6. [Agent Loop](#6-agent-loop)
+6. [Agent Runtime (Agentic Loop)](#6-agent-runtime-agentic-loop)
 7. [Agent Tools](#7-agent-tools)
 8. [Tool Security Model](#8-tool-security-model)
 9. [Company Data Authorization](#9-company-data-authorization)
@@ -50,7 +50,7 @@ Built as a technical evaluation prototype for NovaAI (fictional company) — des
 
 ### What the Email Agent Does
 
-The AI Email Handling Agent periodically (on invocation) checks a mailbox, discovers emails, classifies each message, retrieves **only authorized** company information through controlled application tools, generates grounded replies using **Mistral AI**, validates those replies deterministically, sends responses, and logs all outcomes to a persistent SQLite database.
+The AI Email Handling Agent checks a mailbox on each run (or **continuously polls** until stopped), discovers unread emails, and for each message runs a **multi-turn LLM agentic loop**: the model chooses tools (`get_email`, `get_product_information`, `send_reply`, etc.), retrieves **only authorized** company information, generates grounded replies using **Mistral AI**, validates those replies deterministically, sends responses, marks Gmail messages read **only when appropriate** (reply sent or clear spam — unrelated/job/partnership emails stay unread for staff), and logs all outcomes to SQLite.
 
 ### Business Problem
 
@@ -75,7 +75,7 @@ Email handling requires **semantic interpretation** (what does the customer mean
 
 The system performs actions (send email, update database) only after deterministic checks pass.
 
-> **Note:** This project uses an **explicit Python agent loop** (`app/agent/loop.py`). It does **not** use LangGraph. See [docs/langgraph_architecture_overview.md](docs/langgraph_architecture_overview.md) for how LangGraph concepts relate to this design and for future architecture options.
+> **Architecture (feature branch):** Production uses **`AgentRuntime`** (`app/agent/runtime.py`) — a **genuine agentic loop** where the LLM chooses each next tool or FINAL action via structured `AgentDecision`. **`AgentHarness`** (`app/harness/runtime.py`) provides deterministic controls (authorization, limits, duplicate guard). Legacy predetermined workflow remains in `app/agent/loop.py` (deprecated). See [docs/presentation.md](docs/presentation.md) and [docs/AGENT_WORKFLOW_DIAGRAM.md](docs/AGENT_WORKFLOW_DIAGRAM.md).
 
 ---
 
@@ -117,14 +117,14 @@ The agent/LLM must **not** directly query the company database. Company informat
 
 | Requirement | Description | Implementation Status |
 |-------------|-------------|----------------------|
-| Email polling | Check mailbox on agent run | **IMPLEMENTED** — single CLI invocation per run; no cron/scheduler |
-| Periodic execution | Run on a schedule | **PARTIALLY IMPLEMENTED** — manual/CLI trigger; external scheduler not included |
+| Email polling | Check mailbox on agent run | **IMPLEMENTED** — CLI single cycle or continuous polling (`run_agent.py`, `AGENT_CONTINUOUS_MODE`) |
+| Periodic execution | Run on a schedule | **IMPLEMENTED** — continuous mode with `AGENT_POLL_INTERVAL_SECONDS`; external cron optional |
 | Email count | Return number of emails | **IMPLEMENTED** — `EmailProvider.get_email_count()` |
 | Email listing | List email summaries | **IMPLEMENTED** — `EmailProvider.list_emails()` |
 | Email retrieval | Fetch full email by ID | **IMPLEMENTED** — `EmailProvider.get_email(email_id)` |
 | Email classification | Determine intent and action | **IMPLEMENTED** — Mistral / MockLLM → `EmailClassification` |
 | Product/service detection | Identify product/service inquiries | **IMPLEMENTED** — `is_product_or_service_inquiry` field |
-| Company data retrieval | Fetch approved company info | **IMPLEMENTED** — `CompanyDataTools` |
+| Company data retrieval | Fetch approved company info | **IMPLEMENTED** — `AgentToolKit` (`get_product_information`, `get_service_information`) |
 | Authorization | Filter restricted fields | **IMPLEMENTED** — `AuthorizationService` |
 | Response generation | Generate grounded reply | **IMPLEMENTED** — Mistral / MockLLM → `GeneratedReply` |
 | Response validation | Validate before send | **IMPLEMENTED** — `ResponseValidator` |
@@ -133,9 +133,9 @@ The agent/LLM must **not** directly query the company database. Company informat
 | Reply persistence | Store sent replies | **IMPLEMENTED** — `replies` table |
 | Duplicate prevention | Never process same email twice | **IMPLEMENTED** — DB PK + state machine |
 | Database access restriction | LLM cannot query DB | **IMPLEMENTED** — no SQL tools exposed |
-| Unit tests | Deterministic test suite | **IMPLEMENTED** — 36 pytest tests |
+| Unit tests | Deterministic test suite | **IMPLEMENTED** — 46+ pytest tests |
 | LLM evals | Probabilistic behavior evaluation | **IMPLEMENTED** — 20-case eval dataset |
-| Gmail integration | Real email provider | **PARTIALLY IMPLEMENTED** — code exists; OAuth not configured in repo |
+| Gmail integration | Real email provider | **IMPLEMENTED** — OAuth, query filters, scan limits, selective mark-read policy, body/snippet parsing |
 | HTTP API | REST endpoints | **PLANNED** — FastAPI in `requirements.txt` but no routes implemented |
 | LangGraph orchestration | Graph-based agent | **PLANNED** — not in current codebase |
 
@@ -149,14 +149,14 @@ flowchart TB
         CLI["CLI Entry Point<br/>app/main.py"]
     end
 
-    subgraph harness [Harness Layer]
-        Guardrails["AgentGuardrails<br/>step limits, category rules"]
+    subgraph harness [Harness Layer — deterministic control]
+        AgentHarness["AgentHarness<br/>app/harness/runtime.py"]
         StateMgr["ProcessingStateManager<br/>duplicate prevention"]
         Validator["ResponseValidator<br/>pre-send checks"]
     end
 
-    subgraph agent [Agent Layer]
-        AgentLoop["AgentLoop<br/>app/agent/loop.py"]
+    subgraph agent [Agent Layer — probabilistic loop]
+        AgentRuntime["AgentRuntime<br/>app/agent/runtime.py"]
     end
 
     subgraph providers [Provider Layer]
@@ -165,7 +165,7 @@ flowchart TB
     end
 
     subgraph tools [Tool Layer]
-        CompanyTools["CompanyDataTools<br/>get_product_information<br/>get_service_information"]
+        AgentToolkit["AgentToolKit<br/>get_email, get_product_information,<br/>get_service_information, send_reply"]
     end
 
     subgraph services [Service Layer]
@@ -179,19 +179,19 @@ flowchart TB
         SQLite[("SQLite<br/>agent.db")]
     end
 
-    CLI --> AgentLoop
-    AgentLoop --> Guardrails
-    AgentLoop --> StateMgr
-    AgentLoop --> Validator
-    AgentLoop --> EmailProv
-    AgentLoop --> LLMProv
-    AgentLoop --> CompanyTools
-    CompanyTools --> AuthSvc
-    CompanyTools --> CompanySvc
+    CLI --> AgentRuntime
+    AgentRuntime --> AgentHarness
+    AgentRuntime --> StateMgr
+    AgentRuntime --> LLMProv
+    AgentHarness --> AgentToolkit
+    AgentToolkit --> Validator
+    AgentToolkit --> EmailProv
+    AgentToolkit --> AuthSvc
+    AgentToolkit --> CompanySvc
     CompanySvc --> AuthSvc
     CompanySvc --> CompanyRepo
     StateMgr --> DBRepos
-    AgentLoop --> DBRepos
+    AgentRuntime --> DBRepos
     DBRepos --> SQLite
     LLMProv -.->|"never receives"| SQLite
     LLMProv -.->|"never receives"| DBRepos
@@ -201,13 +201,13 @@ flowchart TB
 
 | Component | File(s) | Role |
 |-----------|---------|------|
-| **CLI Entry Point** | `app/main.py`, `run_agent.py` | Loads config, wires dependencies, runs one agent cycle |
-| **Agent Loop** | `app/agent/loop.py` | Orchestrates per-email workflow |
+| **CLI Entry Point** | `app/main.py`, `run_agent.py` | Single cycle or continuous polling; prints run results |
+| **Agent Runtime** | `app/agent/runtime.py` | LLM-driven agentic loop per email |
 | **Agent Factory** | `app/agent/agent.py` | Dependency injection / wiring |
-| **Harness** | `app/harness/` | Guardrails, state management, response validation |
+| **Harness** | `app/harness/runtime.py`, `state.py`, `validator.py` | Tool auth, limits, duplicate guard, validation |
 | **Email Provider** | `app/email/` | Abstract mailbox access (Mock default, Gmail optional) |
 | **LLM Provider** | `app/llm/` | Mistral AI (production) or MockLLM (tests/offline) |
-| **Company Data Tools** | `app/tools/company_data_tools.py` | Controlled company information access |
+| **Company Data Tools** | `app/tools/agent_toolkit.py`, `registry.py` | LLM-invokable authorized tools |
 | **Authorization** | `app/company/authorization.py` | Deterministic field filtering |
 | **Repositories** | `app/db/repositories.py` | All database access |
 | **SQLite** | `data/agent.db` | Persistent processing state and audit trail |
@@ -216,86 +216,112 @@ flowchart TB
 
 ## 5. Core Agent Workflow
 
+> **Current architecture:** Per-email processing is an **LLM agentic loop** in `AgentRuntime._run_agentic_loop()` — not a fixed classify→reply pipeline. See [docs/AGENT_WORKFLOW_DIAGRAM.md](docs/AGENT_WORKFLOW_DIAGRAM.md).
+
 ```mermaid
 flowchart TD
-    START([START Agent Run]) --> COUNT[Get email count]
-    COUNT --> LIST[List emails]
-    LIST --> LOOP{For each email}
-    LOOP --> SKIP_CHECK{Already processed?}
-    SKIP_CHECK -->|YES| SKIP_LOG[Skip + Log reason]
-    SKIP_LOG --> LOOP
-    SKIP_CHECK -->|NO| CLAIM[Claim for processing<br/>DB insert processing]
-    CLAIM -->|Failed| SKIP_CLAIM[Skip — race/duplicate]
-    SKIP_CLAIM --> LOOP
-    CLAIM -->|Success| FETCH[Retrieve email]
-    FETCH -->|Not found| FAIL1[Mark failed]
-    FAIL1 --> LOOP
-    FETCH --> CLASSIFY[Mistral: Classify email]
-    CLASSIFY -->|Error| FAIL2[Mark failed]
-    FAIL2 --> LOOP
-    CLASSIFY --> GUARD{Guardrails:<br/>should respond?}
-    GUARD -->|NO| SKIP_GUARD[Mark skipped]
-    SKIP_GUARD --> LOOP
-    GUARD -->|YES| TOOLS[Company data tools]
-    TOOLS --> GENERATE[Mistral: Generate reply]
-    GENERATE -->|Error| FAIL3[Mark failed]
-    FAIL3 --> LOOP
-    GENERATE --> VALIDATE{Validate reply}
-    VALIDATE -->|FAIL| FAIL4[Mark failed<br/>Do NOT send]
-    FAIL4 --> LOOP
-    VALIDATE -->|PASS| SEND[Send email]
-    SEND -->|FAIL| FAIL5[Mark failed]
-    FAIL5 --> LOOP
-    SEND -->|SUCCESS| PROCESSED[Log reply<br/>Mark processed]
-    PROCESSED --> LOOP
-    LOOP -->|Done| END([END Agent Run])
+    START([AgentRuntime.run]) --> SCAN[Gmail: scan unread IDs]
+    SCAN --> FILTER[Filter: new / retry failed / cleanup processed]
+    FILTER --> LOOP{For each email}
+    LOOP --> CLAIM[Claim in SQLite]
+    CLAIM --> AGENTIC{Agentic turn loop}
+    AGENTIC --> LLM[decide_next_action]
+    LLM --> NORM[normalize_decision]
+    NORM --> HARNESS[Harness validate]
+    HARNESS -->|CALL_TOOL| TOOL[AgentToolKit]
+    TOOL --> AGENTIC
+    HARNESS -->|FINAL| DONE[Mark processed/skipped/failed]
+    DONE --> READ[Mark Gmail read if terminal]
+    READ --> LOOP
+    LOOP --> END([END run / sleep if continuous])
 ```
+
+Legacy predetermined diagram (deprecated): see `app/agent/loop.py`.
 
 ---
 
-## 6. Agent Loop
+## 6. Agent Runtime (Agentic Loop)
 
 ### Overview
 
-The agent loop is implemented as an explicit Python class: `AgentLoop` in `app/agent/loop.py`. There is no LangGraph graph in the current codebase. Every step is visible in one file — a deliberate design choice for explainability.
+The per-email agent is **`AgentRuntime`** in `app/agent/runtime.py`. Each turn:
+
+1. Build `AgentState` and expose a safe LLM context (`to_llm_context()`).
+2. **LLM** returns structured **`AgentDecision`**: `CALL_TOOL` or `FINAL`.
+3. **`AgentHarness`** validates the decision (tool registered, authorized, within limits).
+4. **`AgentToolKit`** executes the tool deterministically.
+5. Tool result is appended to state; loop repeats until `FINAL` or a harness stop condition.
+
+Mailbox discovery (count, list) remains deterministic in the runtime outer loop — the LLM chooses tools **within** each email's processing session.
+
+Legacy predetermined workflow: `app/agent/loop.py` (deprecated, tests skipped).
+
+### Gmail queue filtering (before agentic loop)
+
+| Record in DB | Behavior |
+|--------------|----------|
+| Not found | Process as new email |
+| `failed` (retryable) | Reclaim and retry (max 2 attempts) |
+| `skipped` (`completed_without_reply`) | Clear record and retry agent |
+| `skipped` (`human_review:*`) | Terminal skip — **stay UNREAD**, no LLM retry |
+| `processed` (reply sent) | Mark read in Gmail (cleanup) |
+| `skipped` (`auto_handled:spam`) | Mark read |
+| `failed` (max attempts) | **Stay UNREAD** — staff can investigate |
+
+Policy: `app/harness/read_policy.py` — separates “handled by agent” from “hidden from humans.”
+
+### Gmail mark-read policy
+
+SQLite prevents duplicate LLM processing; Gmail unread status is a **separate UX concern** for staff.
+
+| Outcome | Gmail UNREAD | Example skip reason |
+|---------|--------------|---------------------|
+| Reply sent | Removed (marked read) | — |
+| Clear spam | Removed | `auto_handled:spam` |
+| Job application | **Kept** | `human_review:job_application` |
+| Partnership | **Kept** | `human_review:partnership` |
+| Unrelated topic | **Kept** | `human_review:unrelated` |
+| Restricted info request | **Kept** | `human_review:restricted_info` |
+| Failed (any) | **Kept** | `tool_failed:…` |
+
+Mistral is prompted to emit `human_review:*` skip reasons for non-inquiry mail. Harness normalizes legacy reason strings via `normalize_skip_reason()`.
+
+Set `GMAIL_MARK_READ_AFTER_PROCESSING=false` to disable all mark-read operations.
 
 ### When the Loop Starts
 
-1. `app/main.py` loads settings from environment (`.env`)
-2. `create_agent()` wires all dependencies (`app/agent/agent.py`)
-3. `AgentLoop.run()` is called
+1. `app/main.py` or `run_agent.py` loads settings from `.env`
+2. `create_agent()` wires dependencies (`app/agent/agent.py`)
+3. `AgentRuntime.run()` is called (once per cycle)
 4. An `agent_runs` record is created with status `running`
 
 ### How Emails Are Discovered
 
 ```python
 count = self._email.get_email_count()
-summaries = self._email.list_emails()
+all_summaries = self._email.list_emails()  # IDs only from Gmail scan
+# Runtime filters: new, retry, cleanup — then caps to GMAIL_MAX_MESSAGES_PER_RUN
 ```
 
-For each `EmailSummary`, `_process_email(email_id)` is called.
+Full email body is loaded when the LLM calls tool **`get_email`**, not during listing.
 
 ### Processing State Check (Guardrail #1)
 
-Before any LLM call:
+Before the agentic loop:
 
 1. `ProcessingStateManager.should_skip(email_id)` — checks terminal states
 2. `ProcessingStateManager.claim(email_id)` — atomic DB claim → `processing`
 
-### Email Retrieval
+### LLM Decisions (Probabilistic)
 
-`EmailProvider.get_email(email_id)` returns `EmailMessage` (sender, subject, body, thread_id).
+Each turn, Mistral/Mock returns `AgentDecision` via structured output / function calling:
 
-### Mistral Usage
+| Action | Meaning |
+|--------|---------|
+| `CALL_TOOL` | Invoke `get_email`, `get_product_information`, `get_service_information`, or `send_reply` |
+| `FINAL` | Stop with outcome (`replied`, `skipped`, `failed`, etc.) |
 
-Two probabilistic calls per eligible email:
-
-1. **Classification:** `llm.classify_email(sender, subject, body)` → `EmailClassification`
-2. **Reply generation:** `llm.generate_reply(sender, subject, body, company_info)` → `GeneratedReply`
-
-### Tool Invocation
-
-Tools are **not** called by Mistral directly. The agent loop calls `CompanyDataTools.gather_information_for_classification()` based on classification output (`product_names`, `service_names`). This is application-orchestrated tool use, not LLM-initiated function calling.
+The LLM may also use embedded classification/reply generation inside tool results and FINAL payloads depending on provider flow.
 
 ### Decision Points
 
@@ -303,29 +329,46 @@ Tools are **not** called by Mistral directly. The agent loop calls `CompanyDataT
 |------|---------------|------|
 | Skip already processed | `ProcessingStateManager` | Deterministic |
 | Claim email | `ProcessedEmailRepository` | Deterministic |
-| Classify | Mistral / MockLLM | Probabilistic |
-| Should respond | `AgentGuardrails.should_respond_to_classification()` | Deterministic |
-| Fetch company data | `CompanyDataTools` + `AuthorizationService` | Deterministic |
-| Generate reply | Mistral / MockLLM | Probabilistic |
-| Validate reply | `ResponseValidator` | Deterministic |
-| Send email | `EmailProvider.send_email()` | Deterministic |
+| **Next action** | **LLM `decide_next_action`** | **Probabilistic** |
+| Validate tool call | `AgentHarness` | Deterministic |
+| Execute tool | `AgentToolKit` | Deterministic |
+| Validate reply (send_reply) | `ResponseValidator` | Deterministic |
+| Stop (max turns/tools) | `AgentHarness` | Deterministic |
 
 ### Loop Termination
 
-- All emails in the list are processed, OR
-- `MAX_AGENT_STEPS` exceeded (default 50) — loop aborts with error log
+- LLM selects `FINAL`, OR
+- `MAX_AGENT_TURNS_PER_EMAIL` exceeded (default 15), OR
+- `MAX_TOOL_CALLS` exceeded, OR
+- Harness guardrail violation / unrecoverable tool error
 
-### Failure Handling
+Outer mailbox loop also stops when all emails processed or `MAX_AGENT_STEPS` exceeded.
 
-Failures mark the email as `failed` in `processed_emails` with `error_message`. No reply is sent on classification failure, validation failure, or send failure.
+**Continuous mode:** After a cycle completes, sleep `AGENT_POLL_INTERVAL_SECONDS` and repeat until Ctrl+C.
+
+### Failure Handling & Retries
+
+- Failures mark email `failed` in SQLite with `attempts=N|error` tagging
+- **Retryable** failures (attempts < 2) are reclaimed on next cycle if still unread in Gmail
+- **Legacy untagged** or **max-attempt** failures stay **UNREAD** in Gmail (DB prevents reprocessing)
+- `decision_normalize.py` repairs common Mistral malformed decisions before harness validation
 
 ---
 
-## 7. Agent Tools
+### LLM-Callable Tools (AgentToolKit)
 
-### Email Operations (via EmailProvider interface)
+The LLM chooses among registered tools in `app/tools/registry.py`. Execution goes through `AgentToolKit` → harness validation.
 
-Email operations are **not** exposed as LLM-callable tools. The agent loop calls the provider directly.
+| Tool | Purpose | Authorization |
+|------|---------|---------------|
+| `get_email` | Fetch full message for current `email_id` | Agent session only |
+| `get_product_information` | Authorized product fields | `AuthorizationService` filters restricted data |
+| `get_service_information` | Authorized service fields | Same |
+| `send_reply` | Validate + send reply | Requires passing `ResponseValidator` |
+
+Email list/count operations remain in the runtime outer loop (not LLM tools in v1).
+
+### Legacy Email Operations (EmailProvider)
 
 | Operation | Interface Method | Purpose | Inputs | Outputs | Side Effect | Access |
 |-----------|-----------------|---------|--------|---------|-------------|--------|
@@ -336,14 +379,16 @@ Email operations are **not** exposed as LLM-callable tools. The agent loop calls
 
 Implementations: `MockEmailProvider` (`app/email/mock_provider.py`), `GmailEmailProvider` (`app/email/gmail_provider.py`).
 
-### Company Data Tools (LLM-adjacent, application-orchestrated)
+### Agent Tools (LLM-chosen via `AgentDecision`)
 
 | Tool | Purpose | Inputs | Outputs | Side Effect | Access |
 |------|---------|--------|---------|-------------|--------|
-| `get_product_information` | Authorized product data | `product_name: str` | `dict \| None` (public fields only) | Logged in tool call log | Agent loop via `CompanyDataTools` |
-| `get_service_information` | Authorized service data | `service_name: str` | `dict \| None` (public fields only) | Logged in tool call log | Agent loop via `CompanyDataTools` |
+| `get_email` | Fetch full message body | `email_id` | `EmailMessage` | None | AgentRuntime via `AgentToolKit` |
+| `get_product_information` | Authorized product data | `product_name: str` | public fields dict | Logged | AgentRuntime via `AgentToolKit` |
+| `get_service_information` | Authorized service data | `service_name: str` | public fields dict | Logged | AgentRuntime via `AgentToolKit` |
+| `send_reply` | Validate + send reply | recipient, subject, body | sent bool | Sends email + DB audit | AgentRuntime via `AgentToolKit` |
 
-Defined in: `app/tools/company_data_tools.py`
+Defined in: `app/tools/registry.py`, executed by `app/tools/agent_toolkit.py`
 
 **Forbidden tools** (blocked in code and policy): `execute_sql`, `query_database`, `list_all_products`, `list_all_services`, `get_internal_data`, `get_customer_data`
 
@@ -364,20 +409,22 @@ Defined in: `app/tools/company_data_tools.py`
 
 ```mermaid
 flowchart LR
-    Mistral["Mistral AI<br/>(classification + reply text)"]
-    AgentLoop["Agent Loop<br/>(orchestrator)"]
-    Tools["CompanyDataTools"]
+    Mistral["Mistral AI<br/>(decide_next_action + reply text)"]
+    Runtime["AgentRuntime<br/>(orchestrator)"]
+    Harness["AgentHarness"]
+    Tools["AgentToolKit"]
     Service["CompanyDataService"]
     Auth["AuthorizationService"]
     Repo["CompanyRepository<br/>(JSON files)"]
     DB[("SQLite<br/>(state only)")]
 
-    Mistral -->|"structured text only"| AgentLoop
-    AgentLoop --> Tools
+    Mistral -->|"structured AgentDecision"| Runtime
+    Runtime --> Harness
+    Harness --> Tools
     Tools --> Service
     Service --> Auth
     Service --> Repo
-    AgentLoop --> DB
+    Runtime --> DB
 
     Mistral -.-x|"NO ACCESS"| DB
     Mistral -.-x|"NO ACCESS"| Repo
@@ -397,7 +444,7 @@ flowchart LR
 - Call tools directly (no function-calling API exposed to Mistral)
 - Access restricted company fields (filtered before data reaches prompts)
 - Decide authorization rules (guardrails are deterministic Python code)
-- Send emails directly (agent loop sends after validation)
+- Send emails directly (`send_reply` tool sends after harness + validation)
 
 ### Enforcement Mechanism
 
@@ -412,8 +459,8 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Agent["Agent Loop"]
-    Tool["CompanyDataTools.call_tool()"]
+    Runtime["AgentRuntime"]
+    Tool["AgentToolKit.execute()"]
     Forbidden{"Forbidden tool?"}
     Service["CompanyDataService"]
     Auth["AuthorizationService.filter_public_fields()"]
@@ -421,7 +468,7 @@ flowchart TD
     Filtered["Authorized dict<br/>(public fields only)"]
     Prompt["Mistral prompt context"]
 
-    Agent --> Tool
+    Runtime --> Tool
     Tool --> Forbidden
     Forbidden -->|YES| Block["Return None + log"]
     Forbidden -->|NO| Service
@@ -478,8 +525,9 @@ Mistral AI provides cost-effective, capable models with structured JSON output s
 
 | Call | Method | Schema |
 |------|--------|--------|
-| Classification | `MistralProvider.classify_email()` | `EmailClassification` |
+| **Agent turn (primary)** | `MistralProvider.decide_next_action()` | `AgentDecision` |
 | Reply generation | `MistralProvider.generate_reply()` | `GeneratedReply` |
+| Classification (evals) | `MistralProvider.classify_email()` | `EmailClassification` |
 
 Implementation: `app/llm/mistral_provider.py`
 
@@ -568,16 +616,16 @@ Free-form LLM text requires fragile parsing. Pydantic-validated structured outpu
 
 ## 13. Response Generation
 
-### Workflow
+### Workflow (agentic path)
 
-1. **Customer email** provided to Mistral (sender, subject, body)
-2. **Authorized company information** retrieved via `CompanyDataTools.gather_information_for_classification()` using `product_names` and `service_names` from classification
-3. Mistral receives **only** the authorized info string — not the full company database
-4. Mistral generates `GeneratedReply` (subject, body, information_used)
-5. **`ResponseValidator`** checks: non-empty fields, max length, no restricted content patterns
-6. Email sent **only if validation passes**
-7. Reply logged to `replies` table
-8. Email marked `processed` in `processed_emails`
+1. LLM calls `get_email` tool → full customer message in `AgentState`
+2. LLM calls `get_product_information` / `get_service_information` → authorized data appended to state
+3. LLM calls `send_reply` with subject/body grounded on tool results (or `decision_normalize` / `generate_reply` fallback)
+4. **`ResponseValidator`** checks: non-empty fields, max length, no restricted content patterns
+5. Email sent **only if validation passes**
+6. Reply logged to `replies` table; email marked `processed` in `processed_emails`
+
+> **Legacy path:** predetermined classify → `gather_information_for_classification()` → `generate_reply()` in deprecated `loop.py`.
 
 ### Grounding
 
@@ -598,7 +646,8 @@ stateDiagram-v2
     [*] --> processing: claim_for_processing()
     processing --> processed: reply sent successfully
     processing --> failed: error during processing
-    processing --> skipped: guardrail skip
+    processing --> skipped: agent FINAL skip
+    failed --> processing: reclaim_failed_for_retry()
     processed --> [*]
     failed --> [*]
     skipped --> [*]
@@ -623,7 +672,7 @@ Application-level checking provides skip reasons and logging. The PRIMARY KEY en
 
 **Second run:** `mock-001 → skipped (already_processed) → no reply sent`
 
-Tests: `tests/unit/test_state.py`, `tests/unit/test_agent_loop.py::test_duplicate_email_skipped_on_second_run`
+Tests: `tests/unit/test_state.py`, `tests/unit/test_agent_runtime.py`
 
 ---
 
@@ -632,8 +681,8 @@ Tests: `tests/unit/test_state.py`, `tests/unit/test_agent_loop.py::test_duplicat
 The LLM (Mistral) does not query the database.
 
 ```
-Mistral → (text only) → Agent Loop → CompanyDataTools → Service → Authorization → Repository → JSON files
-Agent Loop → Repositories → SQLite (state/logging only)
+Mistral → (structured AgentDecision) → AgentRuntime → AgentToolKit → Service → Authorization → Repository → JSON files
+AgentRuntime → Repositories → SQLite (state/logging only)
 ```
 
 ### Why This Is Safer
@@ -651,19 +700,19 @@ No gap identified for the assignment requirements. Mistral has no path to databa
 
 ## 16. Harness
 
-There is no single class named `Harness`. The **harness role** is fulfilled by components in `app/harness/` plus orchestration in `AgentLoop`:
+The **harness** is the deterministic control plane around the probabilistic agent. It does **not** choose business actions for the LLM.
 
 | Harness Responsibility | Component | File |
 |------------------------|-----------|------|
-| Triggering | CLI entry point | `app/main.py` |
-| Orchestration | Agent loop | `app/agent/loop.py` |
-| State management | ProcessingStateManager | `app/harness/state.py` |
-| Execution boundaries | AgentGuardrails (step/tool limits) | `app/harness/guardrails.py` |
-| Safety checks | AgentGuardrails + ResponseValidator | `app/harness/guardrails.py`, `validator.py` |
-| Stopping conditions | Max steps, max tool calls | `app/config.py` |
-| Logging | Python logging throughout | All modules |
+| Tool validation & limits | **AgentHarness** | `app/harness/runtime.py` |
+| Gmail mark-read policy | **read_policy** | `app/harness/read_policy.py` |
+| State management / idempotency | ProcessingStateManager | `app/harness/state.py` |
+| Reply validation (pre-send) | ResponseValidator | `app/harness/validator.py` |
+| Legacy step limits | AgentGuardrails | `app/harness/guardrails.py` |
+| Stopping conditions | max turns, max tool calls | `app/config.py` |
+| Logging / tracing | Python logging, decision trace | `app/agent/runtime.py` |
 
-The harness is **distinct from Mistral** — it wraps and controls LLM calls rather than delegating decisions to them.
+**Boundary:** LLM proposes `AgentDecision` → harness validates → toolkit executes. Python never hardcodes “always call get_product_information next.”
 
 ---
 
@@ -689,7 +738,8 @@ flowchart TD
 | Email not found | Mark `failed`, error `email_not_found` |
 | Invalid email (empty sender/body) | Mark `failed` |
 | Classification exception | Mark `failed`, no reply |
-| Guardrail skip | Mark `skipped` with reason |
+| Guardrail skip (`human_review:*`) | Mark `skipped`, **leave Gmail UNREAD** |
+| Agent skip (spam `auto_handled:spam`) | Mark `skipped`, mark Gmail read |
 | Reply generation exception | Mark `failed`, no send |
 | Validation failure | Mark `failed`, log reply with `validation_failed` status, **no send** |
 | Send failure | Mark `failed`, reply record marked failed, **not** `processed` |
@@ -706,6 +756,7 @@ flowchart TD
 | Agent run start/end | INFO | `Agent run 1 started: 10 emails found` |
 | Email IDs discovered | INFO | List of IDs |
 | Skip decisions | INFO | `Email mock-001 skipped: already_processed` |
+| Mark-read decisions | INFO | `Email … marked read` or `left UNREAD for human review` |
 | Classification result | INFO | category, requires_action, inquiry flag |
 | Tool calls | INFO | `Tool call: get_product_information(...) -> found` |
 | Authorization blocks | WARNING | Forbidden tool, restricted content |
@@ -779,7 +830,7 @@ For **deterministic** logic: state management, authorization, validation, guardr
 
 ### Integration Tests
 
-Agent loop tests (`tests/unit/test_agent_loop.py`) exercise multi-component flows with MockEmailProvider and MockLLM against real SQLite (temp file).
+Agent runtime integration tests (`tests/unit/test_agent_runtime.py`, `test_decision_normalize.py`, `test_gmail_provider.py`, `test_read_policy.py`) exercise multi-component flows with MockEmailProvider and MockLLM against real SQLite (temp file).
 
 QA script: `scripts/qa_verify.py` — comprehensive verification (40 checks).
 
@@ -793,16 +844,21 @@ LLM behavior should not be tested with exact string assertions — use classific
 
 ## 21. Unit Tests
 
-**Total: 36 tests** (verified via `pytest --collect-only`)
+**Total: 82 tests** (verified via `pytest --collect-only`)
 
-| Test File | What It Verifies | Status |
-|-----------|------------------|--------|
-| `test_state.py` | Claim, skip, duplicate PK, state transitions | PASS |
-| `test_authorization.py` | Authorized fields, forbidden tools, restricted filtering | PASS |
-| `test_validator.py` | Empty body, restricted content, length limits | PASS |
-| `test_agent_loop.py` | Full run, duplicate skip, spam/restricted skip, invalid email | PASS |
-| `test_send_failure.py` | Send failure does not mark processed | PASS |
-| `test_mistral_provider.py` | Mistral provider with mocked client, retries, auth | PASS |
+| Test File | What It Verifies |
+|-----------|------------------|
+| `test_agent_runtime.py` | Full agentic runtime + selective mark-read |
+| `test_read_policy.py` | Human-review vs spam mark-read policy |
+| `test_decision_normalize.py` | LLM decision repair |
+| `test_failure_retry.py` | Failed email retry policy |
+| `test_reclaimed_retry.py` | Reclaimed processing state |
+| `test_gmail_provider.py` | Gmail body extraction helpers |
+| `test_state.py` | Claim, skip, duplicate PK |
+| `test_authorization.py` | Authorized fields, forbidden tools |
+| `test_validator.py` | Empty body, restricted content |
+| `test_send_failure.py` | Send failure does not mark processed |
+| `test_mistral_provider.py` | Mistral provider with mocked client |
 
 Run: `pytest` or `pytest -v`
 
@@ -865,56 +921,42 @@ Run: `python -m evals.run_evals`
 ```
 EMAIL AGENT PROJECT/
 ├── app/
-│   ├── main.py                 # CLI entry point
+│   ├── main.py                 # CLI: single or continuous mode
 │   ├── config.py               # Environment settings
 │   ├── agent/
 │   │   ├── agent.py            # Dependency wiring factory
-│   │   ├── loop.py             # ★ Explicit agent loop
-│   │   ├── prompts.py          # Mistral prompts
-│   │   └── schemas.py          # Pydantic models
+│   │   ├── runtime.py          # ★ AgentRuntime — agentic loop
+│   │   ├── decision_normalize.py  # Mistral decision repair
+│   │   ├── state.py            # AgentState for LLM context
+│   │   ├── loop.py             # Legacy (deprecated)
+│   │   ├── prompts.py
+│   │   └── schemas.py
 │   ├── tools/
-│   │   └── company_data_tools.py
+│   │   ├── agent_toolkit.py    # Tool execution
+│   │   ├── registry.py         # Registered tools catalog
+│   │   └── company_data_tools.py  # Legacy helpers
 │   ├── email/
-│   │   ├── base.py             # EmailProvider interface
-│   │   ├── mock_provider.py
-│   │   └── gmail_provider.py
-│   ├── company/
-│   │   ├── authorization.py
-│   │   ├── repository.py
-│   │   └── service.py
-│   ├── db/
-│   │   ├── database.py
-│   │   ├── models.py
-│   │   └── repositories.py
-│   ├── llm/
 │   │   ├── base.py
-│   │   ├── mistral_provider.py
 │   │   ├── mock_provider.py
-│   │   ├── provider.py
-│   │   └── exceptions.py
-│   └── harness/
-│       ├── guardrails.py
-│       ├── state.py
-│       └── validator.py
+│   │   └── gmail_provider.py   # Gmail OAuth + selective mark-read
+│   ├── harness/
+│   │   ├── runtime.py          # AgentHarness
+│   │   ├── read_policy.py      # Selective Gmail mark-read
+│   │   ├── state.py
+│   │   └── validator.py
+│   ├── llm/
+│   ├── company/
+│   └── db/
 ├── data/
-│   ├── company/                # NovaAI knowledge base (JSON)
-│   └── emails/
-│       └── mock_emails.json    # 10 demo emails
-├── tests/
-│   ├── conftest.py
-│   └── unit/                   # 36 pytest tests
+├── tests/unit/                 # 82 pytest tests
 ├── evals/
-│   ├── dataset.json            # 20 eval cases
-│   ├── evaluator.py
-│   └── run_evals.py
-├── scripts/
-│   └── qa_verify.py            # QA verification script
 ├── docs/
+│   ├── AGENT_WORKFLOW_DIAGRAM.md
+│   ├── REAL_API_SYSTEM_FLOW.md
 │   ├── presentation.md
+│   ├── EMAIL_AGENT_CODE_LEARNING_GUIDE.md
 │   └── langgraph_architecture_overview.md
-├── .env.example
-├── requirements.txt
-├── run_agent.py
+├── run_agent.py                # Continuous polling entry
 └── README.md
 ```
 
@@ -934,7 +976,7 @@ EMAIL AGENT PROJECT/
 | httpx | HTTP | Mistral SDK dependency | **Used** |
 | python-dotenv | Config | `.env` file support | **Used** |
 | MockLLM | LLM (dev) | Offline/测试 keyword classifier | **Used** |
-| Gmail API | Email | Optional real mailbox | **Partial** — code only |
+| Gmail API | Email | Production mailbox (OAuth) | **Used** when `EMAIL_PROVIDER=gmail` |
 | FastAPI | API | HTTP endpoints | **Not used** — in requirements only |
 | uvicorn | API | ASGI server | **Not used** — in requirements only |
 | LangGraph | Orchestration | Graph-based agent | **Not used** |
@@ -946,23 +988,23 @@ EMAIL AGENT PROJECT/
 
 ```mermaid
 flowchart BT
-    Main["app/main.py"]
+    Main["app/main.py / run_agent.py"]
     AgentFactory["app/agent/agent.py"]
-    AgentLoop["app/agent/loop.py"]
+    Runtime["app/agent/runtime.py"]
     Harness["app/harness/*"]
     EmailProv["app/email/*"]
     LLM["app/llm/*"]
-    Tools["app/tools/company_data_tools.py"]
+    Tools["app/tools/agent_toolkit.py"]
     Company["app/company/*"]
     DB["app/db/*"]
 
     Main --> AgentFactory
-    AgentFactory --> AgentLoop
-    AgentLoop --> Harness
-    AgentLoop --> EmailProv
-    AgentLoop --> LLM
-    AgentLoop --> Tools
-    AgentLoop --> DB
+    AgentFactory --> Runtime
+    Runtime --> Harness
+    Runtime --> EmailProv
+    Runtime --> LLM
+    Runtime --> Tools
+    Runtime --> DB
     Tools --> Company
     Harness --> Company
     Harness --> DB
@@ -970,7 +1012,7 @@ flowchart BT
 
 | Module | Responsibility |
 |--------|---------------|
-| `agent/` | Loop orchestration, schemas, prompts, wiring |
+| `agent/` | AgentRuntime, state, schemas, decision normalize, wiring |
 | `harness/` | Guardrails, state, validation |
 | `tools/` | Controlled company data access |
 | `email/` | Mailbox abstraction |
@@ -990,40 +1032,38 @@ flowchart BT
 sequenceDiagram
     participant Customer
     participant Mailbox as EmailProvider
-    participant Agent as AgentLoop
+    participant Runtime as AgentRuntime
     participant State as ProcessingStateManager
     participant Mistral as MistralProvider
-    participant Tools as CompanyDataTools
+    participant Harness as AgentHarness
+    participant Tools as AgentToolKit
     participant Auth as AuthorizationService
     participant Val as ResponseValidator
     participant DB as SQLite
 
     Customer->>Mailbox: Sends inquiry email
-    Agent->>Mailbox: get_email_count()
-    Agent->>Mailbox: list_emails()
+    Runtime->>Mailbox: list_emails() + queue filter
     loop Each email
-        Agent->>State: should_skip(email_id)?
+        Runtime->>State: should_skip(email_id)?
         alt Already processed
-            State-->>Agent: skip
+            State-->>Runtime: skip
         else New email
-            Agent->>State: claim(email_id)
-            Agent->>Mailbox: get_email(email_id)
-            Agent->>Mistral: classify_email()
-            Mistral-->>Agent: EmailClassification
-            Agent->>Agent: guardrails check
-            Agent->>Tools: gather_information()
-            Tools->>Auth: filter public fields
-            Auth-->>Tools: authorized data
-            Tools-->>Agent: company info string
-            Agent->>Mistral: generate_reply()
-            Mistral-->>Agent: GeneratedReply
-            Agent->>Val: validate(reply)
-            alt Valid
-                Agent->>Mailbox: send_email()
-                Agent->>DB: log reply + mark processed
-                Mailbox->>Customer: Reply delivered
-            else Invalid
-                Agent->>DB: mark failed
+            Runtime->>State: claim(email_id)
+            loop Agentic turns
+                Runtime->>Mistral: decide_next_action(state)
+                Mistral-->>Runtime: AgentDecision
+                Runtime->>Harness: validate_decision()
+                alt CALL_TOOL get_email
+                    Runtime->>Mailbox: get_email(email_id)
+                else CALL_TOOL get_product_information
+                    Runtime->>Tools: execute tool
+                    Tools->>Auth: filter public fields
+                    Auth-->>Tools: authorized data
+                else CALL_TOOL send_reply
+                    Runtime->>Val: validate reply
+                    Runtime->>Mailbox: send_email()
+                    Runtime->>DB: mark processed + reply record
+                end
             end
         end
     end
@@ -1070,10 +1110,24 @@ Database initializes automatically on first run (`data/agent.db`).
 
 ### Run the Agent
 
+**Continuous polling (recommended for Gmail production testing):**
+
+```bash
+python run_agent.py
+# Polls inbox every AGENT_POLL_INTERVAL_SECONDS until Ctrl+C
+```
+
+**Single cycle:**
+
 ```bash
 python -m app.main
-# or
-python run_agent.py
+```
+
+**Single cycle via env flag:**
+
+```env
+AGENT_CONTINUOUS_MODE=true
+AGENT_POLL_INTERVAL_SECONDS=60
 ```
 
 ### Run Unit Tests
@@ -1109,8 +1163,15 @@ python scripts/qa_verify.py
 | `DATABASE_URL` | No | `sqlite:///data/agent.db` | SQLite connection string |
 | `GMAIL_CREDENTIALS_PATH` | When `EMAIL_PROVIDER=gmail` | `credentials.json` | Gmail OAuth credentials |
 | `GMAIL_TOKEN_PATH` | When `EMAIL_PROVIDER=gmail` | `token.json` | Gmail OAuth token |
+| `GMAIL_QUERY` | No | `in:inbox is:unread` | Gmail search filter for candidate messages |
+| `GMAIL_MAX_MESSAGES_PER_RUN` | No | `50` | Max new emails to agent-process per cycle |
+| `GMAIL_UNREAD_SCAN_LIMIT` | No | `100` | Unread IDs to scan per cycle (≥ max messages) |
+| `GMAIL_MARK_READ_AFTER_PROCESSING` | No | `true` | When true, mark read **only** after reply sent or clear spam — unrelated/job/partnership emails stay UNREAD |
 | `MAX_AGENT_STEPS` | No | `50` | Max emails processed per run |
-| `MAX_TOOL_CALLS` | No | `10` | Max company tool calls per run |
+| `MAX_AGENT_TURNS_PER_EMAIL` | No | `15` | Max LLM turns per email |
+| `MAX_TOOL_CALLS` | No | `10` | Max tool executions per email |
+| `AGENT_CONTINUOUS_MODE` | No | `false` | When true, `app.main` loops until Ctrl+C |
+| `AGENT_POLL_INTERVAL_SECONDS` | No | `60` | Sleep between continuous cycles |
 | `LOG_LEVEL` | No | `INFO` | Logging verbosity |
 
 ---
@@ -1130,14 +1191,11 @@ python scripts/qa_verify.py
 | 1. Email discovered | `list_emails()` returns `mock-002` among 10 emails |
 | 2. State checked | Not in `processed_emails` → proceed |
 | 3. Claimed | Inserted with status `processing` |
-| 4. Classified | Mistral/MockLLM → `product_features`, inquiry=true |
-| 5. Guardrails | `should_respond` → true |
-| 6. Tool called | `get_product_information("NovaAnalytics")` |
-| 7. Authorized data | Features, integrations returned; `internal_cost` stripped |
-| 8. Reply generated | Mistral produces grounded reply |
-| 9. Validated | Non-empty, no restricted patterns |
-| 10. Sent | `send_email()` to bob@enterprise.com |
-| 11. Logged | `replies` record + `processed_emails.status=processed` |
+| 4. Agentic loop | LLM chooses `get_email` → `get_product_information` → `send_reply` |
+| 5. Authorized data | Features, integrations returned; `internal_cost` stripped |
+| 6. Reply validated | Non-empty, no restricted patterns |
+| 7. Sent | `send_reply` tool → `send_email()` to bob@enterprise.com |
+| 8. Logged | `replies` record + `processed_emails.status=processed` |
 
 ### Second Run — Guardrail Demo
 
@@ -1155,14 +1213,13 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 
 | Time | Topic | Files to Open |
 |------|-------|---------------|
-| 0–2 min | Architecture overview | `README.md` §4, this doc |
-| 2–7 min | Agent loop | `app/agent/loop.py` |
-| 7–12 min | Tools + authorization | `app/tools/company_data_tools.py`, `app/company/authorization.py` |
-| 12–15 min | Mistral integration | `app/llm/mistral_provider.py`, `app/agent/schemas.py` |
-| 15–20 min | Guardrails | `app/harness/state.py`, `app/harness/guardrails.py`, `app/db/repositories.py` |
-| 20–23 min | Deterministic vs probabilistic | `app/agent/loop.py` comments, `README.md` §10 |
-| 23–28 min | Tests + evals | `tests/unit/`, `evals/evaluator.py` |
-| 28–30 min | Live demo | `python -m app.main` (twice) |
+| 0–5 min | Big picture + architecture | `README.md` §4, `docs/AGENT_WORKFLOW_DIAGRAM.md` |
+| 5–10 min | Entry + continuous mode | `run_agent.py`, `app/main.py`, `app/config.py` |
+| 10–18 min | Agentic loop | `app/agent/runtime.py`, `app/agent/state.py`, `app/agent/schemas.py` |
+| 18–22 min | Harness + tools | `app/harness/runtime.py`, `app/tools/agent_toolkit.py`, `app/tools/registry.py` |
+| 22–25 min | LLM + normalize + read policy | `app/llm/mistral_provider.py`, `app/agent/decision_normalize.py`, `app/harness/read_policy.py` |
+| 25–27 min | Gmail + retries | `app/email/gmail_provider.py`, `app/db/repositories.py` |
+| 27–30 min | Live demo | `python run_agent.py` (send test email, watch cycle) |
 
 ---
 
@@ -1170,16 +1227,17 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 
 | Priority | File | Why |
 |----------|------|-----|
-| 1 | `app/agent/loop.py` | Complete workflow in one file |
-| 2 | `app/harness/state.py` | Duplicate prevention |
-| 3 | `app/harness/guardrails.py` | Deterministic decision gates |
-| 4 | `app/tools/company_data_tools.py` | Controlled tool access |
-| 5 | `app/company/authorization.py` | Field-level security |
-| 6 | `app/llm/mistral_provider.py` | Mistral structured outputs |
-| 7 | `app/db/repositories.py` | State machine + DB constraints |
-| 8 | `app/db/models.py` | Schema |
-| 9 | `tests/unit/test_state.py` | Guardrail #1 tests |
-| 10 | `evals/dataset.json` | Eval coverage |
+| 1 | `app/agent/runtime.py` | Outer loop + inner agentic loop |
+| 2 | `app/agent/decision_normalize.py` | Mistral output repair |
+| 3 | `app/harness/runtime.py` | Deterministic policy gate |
+| 4 | `app/harness/read_policy.py` | When Gmail stays unread vs marked read |
+| 5 | `app/tools/agent_toolkit.py` | Tool execution |
+| 6 | `app/harness/state.py` | Duplicate prevention |
+| 7 | `app/email/gmail_provider.py` | Production Gmail integration |
+| 8 | `app/db/repositories.py` | State machine + retry policy |
+| 9 | `app/llm/mistral_provider.py` | Structured `decide_next_action` |
+| 10 | `app/company/authorization.py` | Field-level security |
+| 11 | `tests/unit/test_read_policy.py` | Mark-read policy unit tests |
 
 ---
 
@@ -1187,22 +1245,17 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 
 ### Prototype Limitations
 
-- **No scheduler:** Agent runs once per CLI invocation; no built-in cron
-- **No LangGraph:** Explicit loop only — see future doc for graph migration path
-- **No HTTP API:** FastAPI listed in requirements but not implemented
-- **Single-threaded:** Sequential email processing
 - **SQLite:** Not suitable for high-concurrency production
+- **No HTTP API:** FastAPI listed in requirements but not implemented
+- **No LangGraph:** Explicit runtime loop — see future doc for graph migration
+- **Normalize layer:** Some Mistral malformed outputs require deterministic repair
+- **Selective mark-read:** Unrelated/job/partnership emails stay unread in Gmail; SQLite still prevents re-processing
+- **Gmail backlog:** Large unread backlogs need query tuning (`GMAIL_QUERY`); human-review skips intentionally remain unread
 
-### LLM Limitations
+### Email Provider Notes
 
-- MockLLM uses keywords — not semantic (use `LLM_PROVIDER=mistral` for real behavior)
-- Eval classification accuracy ~80–85% on edge cases with live Mistral
-- No automated hallucination detection beyond restricted-content patterns
-
-### Email Provider Limitations
-
-- Gmail implemented but not tested without OAuth credentials
-- Mock provider does not simulate IMAP/API failures beyond send override in tests
+- Gmail OAuth tested with real inbox; use `GMAIL_QUERY` to limit scope (e.g. `newer_than:2d`)
+- Mock provider for offline demo (`EMAIL_PROVIDER=mock`)
 
 ### Security Limitations
 
@@ -1216,18 +1269,17 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 
 ### Short Term
 
-- Remove unused FastAPI/uvicorn from requirements or implement health/status endpoints
-- Add cron/systemd example for periodic runs
-- Expand eval dataset for restricted-info edge cases
-- Gmail OAuth setup guide with tested flow
+- Human approval workflow before `send_reply` in production
+- Gmail label `NovaAI/Needs-Review` for `human_review:*` skips
+- Expand eval dataset for agent `decide_next_action` accuracy
+- Reduce reliance on `decision_normalize` via prompt tuning
 
 ### Medium Term
 
-- Human approval workflow for outbound replies
 - Stronger prompt-injection defenses
-- LLM-as-judge for reply groundedness scoring
 - PostgreSQL for production persistence
-- Migrate orchestration to LangGraph (see `docs/langgraph_architecture_overview.md`)
+- OpenTelemetry tracing per agent turn
+- Optional LangGraph migration (see `docs/langgraph_architecture_overview.md`)
 
 ### Long Term
 
@@ -1242,8 +1294,11 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 
 | Document | Purpose |
 |----------|---------|
-| [docs/presentation.md](docs/presentation.md) | 5-slide walkthrough for Boni |
-| [docs/langgraph_architecture_overview.md](docs/langgraph_architecture_overview.md) | LangGraph concepts, current vs future architecture |
+| [docs/presentation.md](docs/presentation.md) | 5-slide design defense |
+| [docs/AGENT_WORKFLOW_DIAGRAM.md](docs/AGENT_WORKFLOW_DIAGRAM.md) | Agentic loop flowcharts + mark-read policy |
+| [docs/REAL_API_SYSTEM_FLOW.md](docs/REAL_API_SYSTEM_FLOW.md) | Gmail + Mistral production flow |
+| [docs/EMAIL_AGENT_CODE_LEARNING_GUIDE.md](docs/EMAIL_AGENT_CODE_LEARNING_GUIDE.md) | Deep code learning guide |
+| [docs/langgraph_architecture_overview.md](docs/langgraph_architecture_overview.md) | LangGraph concepts vs current runtime |
 
 ---
 
@@ -1251,8 +1306,9 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 
 ```bash
 pip install -r requirements.txt
-python -m app.main              # Run agent
-pytest                          # Unit tests (36 tests)
-python -m evals.run_evals       # LLM evals
-python scripts/qa_verify.py     # Full QA verification
+python run_agent.py              # Continuous Gmail polling (Ctrl+C to stop)
+python -m app.main               # Single cycle
+pytest                           # Unit tests (82 tests)
+python -m evals.run_evals        # LLM evals
+python scripts/qa_verify.py      # Full QA verification
 ```

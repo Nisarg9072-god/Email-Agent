@@ -1,34 +1,41 @@
 """Test that failed email send does not mark email as processed."""
 
-from app.agent.loop import AgentLoop
+from app.agent.runtime import AgentRuntime
 from app.db.repositories import AgentRunRepository
+from app.harness.runtime import AgentHarness
+from app.tools.agent_toolkit import AgentToolKit
 
 
 class TestSendFailure:
-    def _build_agent(self, session, mock_email_provider, mock_llm, company_tools,
-                     state_manager, guardrails, validator, processed_repo, reply_repo):
-        return AgentLoop(
+    def _build_agent(
+        self, session, mock_email_provider, mock_llm, authorization, validator,
+        state_manager, processed_repo, reply_repo, company_service,
+    ):
+        toolkit = AgentToolKit(
+            mock_email_provider, company_service, authorization, validator
+        )
+        harness = AgentHarness(authorization)
+        return AgentRuntime(
             email_provider=mock_email_provider,
             llm=mock_llm,
-            company_tools=company_tools,
+            toolkit=toolkit,
+            harness=harness,
             state_manager=state_manager,
-            guardrails=guardrails,
-            validator=validator,
             processed_repo=processed_repo,
             reply_repo=reply_repo,
             agent_run_repo=AgentRunRepository(session),
         )
 
     def test_failed_send_not_marked_processed(
-        self, session, mock_email_provider, mock_llm, company_tools,
-        state_manager, guardrails, validator, processed_repo, reply_repo,
+        self, session, mock_email_provider, mock_llm, authorization, validator,
+        state_manager, processed_repo, reply_repo, company_service,
     ):
         original_send = mock_email_provider.send_email
         mock_email_provider.send_email = lambda *a, **kw: False
 
         agent = self._build_agent(
-            session, mock_email_provider, mock_llm, company_tools,
-            state_manager, guardrails, validator, processed_repo, reply_repo,
+            session, mock_email_provider, mock_llm, authorization, validator,
+            state_manager, processed_repo, reply_repo, company_service,
         )
         result = agent.run()
 

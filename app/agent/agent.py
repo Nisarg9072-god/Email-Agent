@@ -1,8 +1,8 @@
-"""Agent factory - wires dependencies together."""
+"""Agent factory - wires dependencies for the agentic runtime."""
 
 import logging
 
-from app.agent.loop import AgentLoop
+from app.agent.runtime import AgentRuntime
 from app.company.authorization import AuthorizationService
 from app.company.repository import CompanyRepository
 from app.company.service import CompanyDataService
@@ -12,11 +12,11 @@ from app.db.repositories import AgentRunRepository, ProcessedEmailRepository, Re
 from app.email.base import EmailProvider
 from app.email.gmail_provider import GmailEmailProvider
 from app.email.mock_provider import MockEmailProvider
-from app.harness.guardrails import AgentGuardrails
+from app.harness.runtime import AgentHarness
 from app.harness.state import ProcessingStateManager
 from app.harness.validator import ResponseValidator
 from app.llm.provider import create_llm_provider
-from app.tools.company_data_tools import CompanyDataTools
+from app.tools.agent_toolkit import AgentToolKit
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +26,21 @@ def create_email_provider(settings: Settings) -> EmailProvider:
         return GmailEmailProvider(
             credentials_path=settings.gmail_credentials_path,
             token_path=settings.gmail_token_path,
+            query=settings.gmail_query,
+            max_messages_per_run=settings.gmail_max_messages_per_run,
+            unread_scan_limit=settings.gmail_unread_scan_limit,
+            mark_read_after_processing=settings.gmail_mark_read_after_processing,
         )
     return MockEmailProvider(settings.mock_emails_path)
 
 
-def create_agent(settings: Settings, db: Database) -> AgentLoop:
-    """Build the agent with all dependencies wired."""
+def create_agent(settings: Settings, db: Database) -> AgentRuntime:
+    """Build the agentic runtime with harness, tools, and LLM."""
     session = db.get_session()
 
     company_repo = CompanyRepository(settings.company_data_dir)
     authorization = AuthorizationService(company_repo)
     company_service = CompanyDataService(company_repo, authorization)
-    company_tools = CompanyDataTools(company_service, authorization)
 
     email_provider = create_email_provider(settings)
     llm = create_llm_provider(
@@ -52,20 +55,21 @@ def create_agent(settings: Settings, db: Database) -> AgentLoop:
     agent_run_repo = AgentRunRepository(session)
 
     state_manager = ProcessingStateManager(processed_repo)
-    guardrails = AgentGuardrails(
-        authorization,
-        max_steps=settings.max_agent_steps,
-        max_tool_calls=settings.max_tool_calls,
-    )
     validator = ResponseValidator(authorization)
+    toolkit = AgentToolKit(email_provider, company_service, authorization, validator)
+    harness = AgentHarness(
+        authorization,
+        max_turns_per_email=settings.max_agent_turns_per_email,
+        max_tool_calls_per_email=settings.max_tool_calls,
+        max_emails_per_run=settings.max_agent_steps,
+    )
 
-    return AgentLoop(
+    return AgentRuntime(
         email_provider=email_provider,
         llm=llm,
-        company_tools=company_tools,
+        toolkit=toolkit,
+        harness=harness,
         state_manager=state_manager,
-        guardrails=guardrails,
-        validator=validator,
         processed_repo=processed_repo,
         reply_repo=reply_repo,
         agent_run_repo=agent_run_repo,
