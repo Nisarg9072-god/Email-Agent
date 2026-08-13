@@ -50,7 +50,7 @@ Built as a technical evaluation prototype for NovaAI (fictional company) — des
 
 ### What the Email Agent Does
 
-The AI Email Handling Agent checks a mailbox on each run (or **continuously polls** until stopped), discovers unread emails, and for each message runs a **multi-turn LLM agentic loop**: the model chooses tools (`get_email`, `get_product_information`, `send_reply`, etc.), retrieves **only authorized** company information, generates grounded replies using **Mistral AI**, validates those replies deterministically, sends responses, marks Gmail messages read when appropriate, and logs all outcomes to SQLite.
+The AI Email Handling Agent checks a mailbox on each run (or **continuously polls** until stopped), discovers unread emails, and for each message runs a **multi-turn LLM agentic loop**: the model chooses tools (`get_email`, `get_product_information`, `send_reply`, etc.), retrieves **only authorized** company information, generates grounded replies using **Mistral AI**, validates those replies deterministically, sends responses, marks Gmail messages read **only when appropriate** (reply sent or clear spam — unrelated/job/partnership emails stay unread for staff), and logs all outcomes to SQLite.
 
 ### Business Problem
 
@@ -135,7 +135,7 @@ The agent/LLM must **not** directly query the company database. Company informat
 | Database access restriction | LLM cannot query DB | **IMPLEMENTED** — no SQL tools exposed |
 | Unit tests | Deterministic test suite | **IMPLEMENTED** — 46+ pytest tests |
 | LLM evals | Probabilistic behavior evaluation | **IMPLEMENTED** — 20-case eval dataset |
-| Gmail integration | Real email provider | **IMPLEMENTED** — OAuth, query filters, scan limits, batch mark-read, body/snippet parsing |
+| Gmail integration | Real email provider | **IMPLEMENTED** — OAuth, query filters, scan limits, selective mark-read policy, body/snippet parsing |
 | HTTP API | REST endpoints | **PLANNED** — FastAPI in `requirements.txt` but no routes implemented |
 | LangGraph orchestration | Graph-based agent | **PLANNED** — not in current codebase |
 
@@ -262,11 +262,31 @@ Legacy predetermined workflow: `app/agent/loop.py` (deprecated, tests skipped).
 |--------------|----------|
 | Not found | Process as new email |
 | `failed` (retryable) | Reclaim and retry (max 2 attempts) |
-| `skipped` (no reply logged) | Clear record and retry |
+| `skipped` (`completed_without_reply`) | Clear record and retry agent |
+| `skipped` (`human_review:*`) | Terminal skip — **stay UNREAD**, no LLM retry |
 | `processed` (reply sent) | Mark read in Gmail (cleanup) |
-| `skipped` (human review: job, partnership, unrelated) | **Stay UNREAD** — staff can review |
-| `skipped` (auto-handled spam) | Mark read |
+| `skipped` (`auto_handled:spam`) | Mark read |
 | `failed` (max attempts) | **Stay UNREAD** — staff can investigate |
+
+Policy: `app/harness/read_policy.py` — separates “handled by agent” from “hidden from humans.”
+
+### Gmail mark-read policy
+
+SQLite prevents duplicate LLM processing; Gmail unread status is a **separate UX concern** for staff.
+
+| Outcome | Gmail UNREAD | Example skip reason |
+|---------|--------------|---------------------|
+| Reply sent | Removed (marked read) | — |
+| Clear spam | Removed | `auto_handled:spam` |
+| Job application | **Kept** | `human_review:job_application` |
+| Partnership | **Kept** | `human_review:partnership` |
+| Unrelated topic | **Kept** | `human_review:unrelated` |
+| Restricted info request | **Kept** | `human_review:restricted_info` |
+| Failed (any) | **Kept** | `tool_failed:…` |
+
+Mistral is prompted to emit `human_review:*` skip reasons for non-inquiry mail. Harness normalizes legacy reason strings via `normalize_skip_reason()`.
+
+Set `GMAIL_MARK_READ_AFTER_PROCESSING=false` to disable all mark-read operations.
 
 ### When the Loop Starts
 
@@ -685,6 +705,7 @@ The **harness** is the deterministic control plane around the probabilistic agen
 | Harness Responsibility | Component | File |
 |------------------------|-----------|------|
 | Tool validation & limits | **AgentHarness** | `app/harness/runtime.py` |
+| Gmail mark-read policy | **read_policy** | `app/harness/read_policy.py` |
 | State management / idempotency | ProcessingStateManager | `app/harness/state.py` |
 | Reply validation (pre-send) | ResponseValidator | `app/harness/validator.py` |
 | Legacy step limits | AgentGuardrails | `app/harness/guardrails.py` |
@@ -717,7 +738,8 @@ flowchart TD
 | Email not found | Mark `failed`, error `email_not_found` |
 | Invalid email (empty sender/body) | Mark `failed` |
 | Classification exception | Mark `failed`, no reply |
-| Guardrail skip | Mark `skipped` with reason |
+| Guardrail skip (`human_review:*`) | Mark `skipped`, **leave Gmail UNREAD** |
+| Agent skip (spam `auto_handled:spam`) | Mark `skipped`, mark Gmail read |
 | Reply generation exception | Mark `failed`, no send |
 | Validation failure | Mark `failed`, log reply with `validation_failed` status, **no send** |
 | Send failure | Mark `failed`, reply record marked failed, **not** `processed` |
@@ -734,6 +756,7 @@ flowchart TD
 | Agent run start/end | INFO | `Agent run 1 started: 10 emails found` |
 | Email IDs discovered | INFO | List of IDs |
 | Skip decisions | INFO | `Email mock-001 skipped: already_processed` |
+| Mark-read decisions | INFO | `Email … marked read` or `left UNREAD for human review` |
 | Classification result | INFO | category, requires_action, inquiry flag |
 | Tool calls | INFO | `Tool call: get_product_information(...) -> found` |
 | Authorization blocks | WARNING | Forbidden tool, restricted content |
@@ -807,7 +830,7 @@ For **deterministic** logic: state management, authorization, validation, guardr
 
 ### Integration Tests
 
-Agent runtime integration tests (`tests/unit/test_agent_runtime.py`, `test_decision_normalize.py`, `test_gmail_provider.py`) exercise multi-component flows with MockEmailProvider and MockLLM against real SQLite (temp file).
+Agent runtime integration tests (`tests/unit/test_agent_runtime.py`, `test_decision_normalize.py`, `test_gmail_provider.py`, `test_read_policy.py`) exercise multi-component flows with MockEmailProvider and MockLLM against real SQLite (temp file).
 
 QA script: `scripts/qa_verify.py` — comprehensive verification (40 checks).
 
@@ -821,11 +844,12 @@ LLM behavior should not be tested with exact string assertions — use classific
 
 ## 21. Unit Tests
 
-**Total: 71 tests** (verified via `pytest --collect-only`)
+**Total: 82 tests** (verified via `pytest --collect-only`)
 
 | Test File | What It Verifies |
 |-----------|------------------|
-| `test_agent_runtime.py` | Full agentic runtime integration |
+| `test_agent_runtime.py` | Full agentic runtime + selective mark-read |
+| `test_read_policy.py` | Human-review vs spam mark-read policy |
 | `test_decision_normalize.py` | LLM decision repair |
 | `test_failure_retry.py` | Failed email retry policy |
 | `test_reclaimed_retry.py` | Reclaimed processing state |
@@ -914,16 +938,17 @@ EMAIL AGENT PROJECT/
 │   ├── email/
 │   │   ├── base.py
 │   │   ├── mock_provider.py
-│   │   └── gmail_provider.py   # Gmail OAuth + batch mark-read
+│   │   └── gmail_provider.py   # Gmail OAuth + selective mark-read
 │   ├── harness/
 │   │   ├── runtime.py          # AgentHarness
+│   │   ├── read_policy.py      # Selective Gmail mark-read
 │   │   ├── state.py
 │   │   └── validator.py
 │   ├── llm/
 │   ├── company/
 │   └── db/
 ├── data/
-├── tests/unit/                 # 71 pytest tests
+├── tests/unit/                 # 82 pytest tests
 ├── evals/
 ├── docs/
 │   ├── AGENT_WORKFLOW_DIAGRAM.md
@@ -1192,7 +1217,7 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 | 5–10 min | Entry + continuous mode | `run_agent.py`, `app/main.py`, `app/config.py` |
 | 10–18 min | Agentic loop | `app/agent/runtime.py`, `app/agent/state.py`, `app/agent/schemas.py` |
 | 18–22 min | Harness + tools | `app/harness/runtime.py`, `app/tools/agent_toolkit.py`, `app/tools/registry.py` |
-| 22–25 min | LLM + normalize | `app/llm/mistral_provider.py`, `app/agent/decision_normalize.py` |
+| 22–25 min | LLM + normalize + read policy | `app/llm/mistral_provider.py`, `app/agent/decision_normalize.py`, `app/harness/read_policy.py` |
 | 25–27 min | Gmail + retries | `app/email/gmail_provider.py`, `app/db/repositories.py` |
 | 27–30 min | Live demo | `python run_agent.py` (send test email, watch cycle) |
 
@@ -1205,13 +1230,14 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 | 1 | `app/agent/runtime.py` | Outer loop + inner agentic loop |
 | 2 | `app/agent/decision_normalize.py` | Mistral output repair |
 | 3 | `app/harness/runtime.py` | Deterministic policy gate |
-| 4 | `app/tools/agent_toolkit.py` | Tool execution |
-| 5 | `app/harness/state.py` | Duplicate prevention |
-| 6 | `app/email/gmail_provider.py` | Production Gmail integration |
-| 7 | `app/db/repositories.py` | State machine + retry policy |
-| 8 | `app/llm/mistral_provider.py` | Structured `decide_next_action` |
-| 9 | `app/company/authorization.py` | Field-level security |
-| 10 | `tests/unit/test_agent_runtime.py` | Integration tests |
+| 4 | `app/harness/read_policy.py` | When Gmail stays unread vs marked read |
+| 5 | `app/tools/agent_toolkit.py` | Tool execution |
+| 6 | `app/harness/state.py` | Duplicate prevention |
+| 7 | `app/email/gmail_provider.py` | Production Gmail integration |
+| 8 | `app/db/repositories.py` | State machine + retry policy |
+| 9 | `app/llm/mistral_provider.py` | Structured `decide_next_action` |
+| 10 | `app/company/authorization.py` | Field-level security |
+| 11 | `tests/unit/test_read_policy.py` | Mark-read policy unit tests |
 
 ---
 
@@ -1223,7 +1249,8 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 - **No HTTP API:** FastAPI listed in requirements but not implemented
 - **No LangGraph:** Explicit runtime loop — see future doc for graph migration
 - **Normalize layer:** Some Mistral malformed outputs require deterministic repair
-- **Gmail backlog:** Large unread backlogs need query tuning or bulk mark-read
+- **Selective mark-read:** Unrelated/job/partnership emails stay unread in Gmail; SQLite still prevents re-processing
+- **Gmail backlog:** Large unread backlogs need query tuning (`GMAIL_QUERY`); human-review skips intentionally remain unread
 
 ### Email Provider Notes
 
@@ -1243,6 +1270,7 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 ### Short Term
 
 - Human approval workflow before `send_reply` in production
+- Gmail label `NovaAI/Needs-Review` for `human_review:*` skips
 - Expand eval dataset for agent `decide_next_action` accuracy
 - Reduce reliance on `decision_normalize` via prompt tuning
 
@@ -1267,7 +1295,7 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 | Document | Purpose |
 |----------|---------|
 | [docs/presentation.md](docs/presentation.md) | 5-slide design defense |
-| [docs/AGENT_WORKFLOW_DIAGRAM.md](docs/AGENT_WORKFLOW_DIAGRAM.md) | Agentic loop flowcharts |
+| [docs/AGENT_WORKFLOW_DIAGRAM.md](docs/AGENT_WORKFLOW_DIAGRAM.md) | Agentic loop flowcharts + mark-read policy |
 | [docs/REAL_API_SYSTEM_FLOW.md](docs/REAL_API_SYSTEM_FLOW.md) | Gmail + Mistral production flow |
 | [docs/EMAIL_AGENT_CODE_LEARNING_GUIDE.md](docs/EMAIL_AGENT_CODE_LEARNING_GUIDE.md) | Deep code learning guide |
 | [docs/langgraph_architecture_overview.md](docs/langgraph_architecture_overview.md) | LangGraph concepts vs current runtime |
@@ -1280,7 +1308,7 @@ This demonstrates **both guardrails**: no duplicate processing, authorized data 
 pip install -r requirements.txt
 python run_agent.py              # Continuous Gmail polling (Ctrl+C to stop)
 python -m app.main               # Single cycle
-pytest                           # Unit tests (71 tests)
+pytest                           # Unit tests (82 tests)
 python -m evals.run_evals        # LLM evals
 python scripts/qa_verify.py      # Full QA verification
 ```

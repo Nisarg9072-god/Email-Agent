@@ -13,7 +13,7 @@
 
 **Constraints:** Deterministic safety for auth/idempotency; probabilistic LLM for language understanding and **tool selection**.
 
-**Production extras:** Gmail OAuth integration, continuous inbox polling, retry limits for failed emails.
+**Production extras:** Gmail OAuth integration, continuous inbox polling, retry limits for failed emails, **selective mark-read** (human-review emails stay unread).
 
 ---
 
@@ -31,7 +31,7 @@ flowchart TD
     HARNESS -->|allowed| TOOL[AgentToolKit]
     TOOL --> RESULT[Tool result → state]
     RESULT --> LOOP
-    HARNESS -->|FINAL| STOP[Mark processed / skipped / failed]
+    HARNESS -->|FINAL| STOP[Persist + selective mark-read]
 ```
 
 **Why this is a genuine agentic loop:** Each turn the **LLM** reads current state + tool history and chooses the **next** action. Python does not hardcode tool order after claim.
@@ -52,7 +52,8 @@ flowchart TD
 | Turn / tool limits | `max_agent_turns_per_email`, `max_tool_calls` |
 | Reply validation | `ResponseValidator` before `send_reply` executes |
 | Retry limits | Max 2 attempts; legacy failures not retried forever |
-| Gmail cleanup | Batch mark-read for already-handled unread IDs |
+| Mark-read policy | `read_policy.py` — reply + spam read; job/partnership/unrelated **stay unread** |
+| Skip reason codes | `human_review:*` vs `auto_handled:spam` in LLM FINAL decisions |
 | Decision repair | `decision_normalize.py` for malformed Mistral output |
 
 **Boundary:** Harness **permits or denies** LLM decisions — it does **not** choose business actions.
@@ -70,7 +71,7 @@ flowchart TD
 | Reply wording in `send_reply` | Reply validation before send |
 | Skip vs act (via FINAL) | Max turns / max tool calls |
 | Inquiry understanding | SQLite state transitions |
-| | Gmail mark-as-read, queue filtering |
+| | Selective Gmail mark-read (`read_policy.py`) |
 | | Retry attempt counting |
 | | `normalize_decision` fallbacks |
 
@@ -78,7 +79,7 @@ flowchart TD
 
 ## Slide 5 — Testing, Ops & Future
 
-**Unit tests (71):** harness, duplicate guard, agent runtime, decision normalize, Gmail helpers, failure retry policy — **no live LLM required for most**.
+**Unit tests (82):** harness, read policy, duplicate guard, agent runtime, decision normalize, Gmail helpers, failure retry — **no live LLM required for most**.
 
 **Evals:** classification accuracy, reply groundedness, agent decision accuracy.
 
@@ -93,6 +94,6 @@ python scripts/qa_verify.py
 
 **Limitations:** Mailbox discovery not LLM-driven; Mistral output sometimes needs normalize; SQLite single-writer.
 
-**Future:** Human-in-the-loop approval, LangGraph optional migration, PostgreSQL, observability dashboard.
+**Future:** Human-in-the-loop approval, Gmail `Needs-Review` label, LangGraph optional migration, PostgreSQL, observability dashboard.
 
 **Design defense:** We use **LLM-driven tool loops** with safety **outside** the model — the pattern production agents use for grounded, auditable automation.

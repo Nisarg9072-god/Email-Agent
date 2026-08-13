@@ -30,7 +30,7 @@ How the agent works with **`EMAIL_PROVIDER=gmail`** and **`LLM_PROVIDER=mistral`
 |----------|--------|
 | Are **full incoming emails** saved locally? | **No.** Bodies live in **Gmail**; fetched into RAM during processing. |
 | Does the agent run continuously? | **Optional.** `run_agent.py` polls forever; `AGENT_CONTINUOUS_MODE=true` does the same via `main.py`. |
-| How avoid processing the same email twice? | SQLite `processed_emails.email_id` + Gmail mark-as-read after terminal outcomes. |
+| How avoid processing the same email twice? | SQLite `processed_emails.email_id` PRIMARY KEY + claim logic. Gmail mark-read is **selective** (not the primary duplicate guard). |
 | Is it a true agentic loop? | **Yes (per email).** LLM chooses `CALL_TOOL` or `FINAL` each turn via `decide_next_action()`. |
 | Where is email content first loaded? | When LLM (or normalize) calls tool `get_email` — not during `list_emails()`. |
 
@@ -123,14 +123,14 @@ Configured via `.env`:
 | `GMAIL_QUERY` | Gmail search syntax (e.g. `in:inbox is:unread newer_than:2d`) |
 | `GMAIL_MAX_MESSAGES_PER_RUN` | Max **new** emails to agent-process per cycle |
 | `GMAIL_UNREAD_SCAN_LIMIT` | How many unread IDs to scan (must be ≥ max messages) |
-| `GMAIL_MARK_READ_AFTER_PROCESSING` | Remove UNREAD label after terminal outcome |
+| `GMAIL_MARK_READ_AFTER_PROCESSING` | When true, mark read **only** after reply sent or clear spam (`app/harness/read_policy.py`) |
 
 **Provider behavior** (`app/email/gmail_provider.py`):
 
 - Accurate pagination (not Gmail `resultSizeEstimate`)
 - `list_emails()` returns **IDs only** (no N× metadata fetch)
 - Body extraction: plain text → HTML → **snippet fallback** → subject fallback
-- `mark_many_as_read()` — batch cleanup for already-handled IDs
+- `mark_many_as_read()` — batch cleanup for reply-sent / spam IDs only (via read policy)
 - Attachment text parts fetched when body is in `attachmentId`
 
 ---
@@ -146,6 +146,7 @@ flowchart TB
     end
 
     subgraph Agent["AgentRuntime"]
+        READPOL["read_policy"]
         HARNESS["AgentHarness"]
         NORM["decision_normalize"]
         TOOLS["AgentToolKit"]
@@ -159,6 +160,7 @@ flowchart TB
 
     CMD --> ENV --> Agent
     Agent --> HARNESS
+    Agent --> READPOL
     Agent --> NORM
     Agent --> TOOLS
     Agent --> STATE
@@ -245,7 +247,7 @@ flowchart TD
 | `messages.list` | Start of each cycle | Scan unread IDs (`GMAIL_QUERY`) |
 | `messages.get` (full) | Tool `get_email` | Body + headers + threadId |
 | `messages.send` | Tool `send_reply` | Send customer reply |
-| `messages.modify` / `batchModify` | After terminal outcome / cleanup | Remove UNREAD label |
+| `messages.modify` / `batchModify` | After reply sent or spam skip (read policy) | Remove UNREAD label selectively |
 
 ---
 
@@ -257,19 +259,29 @@ flowchart TD
 email_id PRIMARY KEY → claim → processing → processed | failed | skipped
 ```
 
-### Gmail mark-as-read
+### Gmail mark-as-read (`app/harness/read_policy.py`)
 
-- **Processed / skipped:** marked read immediately
-- **Failed:** stays unread until max attempts, then marked read
-- **Cleanup batch:** already-handled IDs still unread in Gmail → batch mark read
+**Design goal:** Do not hide emails that need human attention just because the agent decided not to reply.
+
+| Outcome | Mark read? | Notes |
+|---------|------------|-------|
+| `processed` + reply sent | **Yes** | Customer inquiry handled |
+| `skipped` + `auto_handled:spam` | **Yes** | Safe junk |
+| `skipped` + `human_review:*` | **No** | Job apps, partnerships, unrelated topics |
+| `failed` (any attempt count) | **No** | Staff can investigate in inbox |
+| Cleanup batch | Policy-filtered | Only IDs where `should_mark_gmail_read()` is true |
+
+**Cleanup batch:** Already-handled unread IDs in Gmail → mark read only if policy allows (typically reply-sent `processed` rows).
 
 ### Retry policy (`app/db/repositories.py`)
 
 | Status | Retry? |
 |--------|--------|
 | `failed` with attempts < 2 | Yes — `reclaim_failed_for_retry()` |
-| `failed` max attempts | No — mark read, log warning |
-| `skipped` without reply in DB | Yes — clear and reprocess |
+| `failed` max attempts | No — **stay unread**, log warning |
+| `skipped` + `completed_without_reply` | Yes — clear and reprocess |
+| `skipped` + `human_review:*` | No — terminal, stay unread |
+| `skipped` + `auto_handled:spam` | No — terminal, mark read |
 | Legacy untagged failures | Treated as exhausted (no infinite loop) |
 
 ---
@@ -288,6 +300,7 @@ GMAIL_QUERY=in:inbox is:unread newer_than:2d
 GMAIL_MAX_MESSAGES_PER_RUN=3
 GMAIL_UNREAD_SCAN_LIMIT=100
 GMAIL_MARK_READ_AFTER_PROCESSING=true
+# When true: mark read only after reply sent or spam — human_review skips stay UNREAD
 
 AGENT_CONTINUOUS_MODE=false
 AGENT_POLL_INTERVAL_SECONDS=60
@@ -321,14 +334,14 @@ python -m app.main           # single cycle (or set AGENT_CONTINUOUS_MODE=true)
 │  EMAIL STORAGE                                               │
 │  • Incoming → Gmail (RAM briefly during get_email)             │
 │  • Outgoing replies → SQLite replies + Gmail Sent              │
-│  • Duplicate guard → processed_emails.email_id                 │
-│  • Gmail UNREAD cleared after terminal outcome               │
+│  • Duplicate guard → processed_emails.email_id (primary)       │
+│  • Gmail UNREAD: reply + spam cleared; human_review kept     │
 ├─────────────────────────────────────────────────────────────┤
 │  TYPICAL APIs PER REPLIED EMAIL                              │
-│  • Gmail: list + get + send + mark read                      │
+│  • Gmail: list + get + send + mark read (if policy allows)   │
 │  • Mistral: 3–5 decide_next_action calls (+ generate_reply   │
 │    if normalize forces send)                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-*Document version: 2.0 — AgentRuntime + continuous mode + Gmail production upgrades (August 2026)*
+*Document version: 2.1 — selective Gmail mark-read policy + human_review skips (August 2026)*

@@ -3,7 +3,7 @@
 **NovaAI Email Agent Project**  
 **Purpose:** Personal textbook for understanding every important file, execution path, and design decision  
 **Repository:** `c:\Users\nisar\Desktop\EMAIL AGENT PROJECT`  
-**Verified against source:** August 13, 2026 (AgentRuntime, continuous mode, Gmail production upgrades)
+**Verified against source:** August 13, 2026 (AgentRuntime, continuous mode, Gmail production, selective mark-read)
 
 ---
 
@@ -16,11 +16,12 @@
 | **AgentToolKit** | `app/tools/agent_toolkit.py` | Executes registered tools (`get_email`, `get_product_information`, etc.) |
 | **decision_normalize** | `app/agent/decision_normalize.py` | Repairs malformed Mistral decisions (missing tool name, premature FINAL) |
 | **Continuous polling** | `run_agent.py`, `app/main.py` | Poll inbox every N seconds until Ctrl+C |
-| **Gmail production** | `app/email/gmail_provider.py` | Query filters, scan limits, batch mark-read, snippet/HTML body parsing |
+| **Gmail production** | `app/email/gmail_provider.py` | Query filters, scan limits, snippet/HTML body parsing |
+| **Selective mark-read** | `app/harness/read_policy.py` | Reply + spam marked read; `human_review:*` skips stay UNREAD |
 | **Retry policy** | `app/db/repositories.py` | Max 2 attempts for failed emails; no infinite retry loops |
 | **Legacy deprecated** | `app/agent/loop.py` | Old classify→reply pipeline — do not use for walkthrough |
 
-**Primary study path:** `runtime.py` → `state.py` → `decision_normalize.py` → `harness/runtime.py` → `agent_toolkit.py`
+**Primary study path:** `runtime.py` → `state.py` → `read_policy.py` → `harness/runtime.py` → `agent_toolkit.py`
 
 ---
 
@@ -160,6 +161,7 @@ EMAIL AGENT PROJECT/
 │   │   └── prompts.py             # Mistral prompt templates
 │   ├── harness/
 │   │   ├── runtime.py             # AgentHarness ★
+│   │   ├── read_policy.py           # Selective Gmail mark-read ★
 │   │   ├── state.py               # ProcessingStateManager
 │   │   └── validator.py           # ResponseValidator
 │   ├── tools/
@@ -173,8 +175,9 @@ EMAIL AGENT PROJECT/
 │   │   └── mock_provider.py
 │   └── db/
 │       └── repositories.py        # State machine + retry policy
-├── tests/unit/                    # 71 pytest tests
+├── tests/unit/                    # 82 pytest tests
 │   ├── test_agent_runtime.py
+│   ├── test_read_policy.py
 │   ├── test_decision_normalize.py
 │   ├── test_gmail_provider.py
 │   └── ...
@@ -196,6 +199,7 @@ EMAIL AGENT PROJECT/
 | `mistral_provider.py` | Mistral API | `decide_next_action`, `generate_reply` | `AgentDecision` / reply text |
 | `agent_toolkit.py` | Tool execution | harness-approved CALL_TOOL | Email, company data, send |
 | `harness/runtime.py` | Policy gate | each LLM turn | allow/reject decision |
+| `harness/read_policy.py` | Gmail mark-read | finalize / cleanup | read vs leave unread |
 | `repositories.py` | SQLite + retry policy | State manager, runtime | ORM models |
 | `gmail_provider.py` | Production mailbox | toolkit / runtime | Gmail API |
 
@@ -700,7 +704,7 @@ START run()
         harness.validate_decision
           CALL_TOOL → AgentToolKit.execute → append result → next turn
           FINAL → mark processed/skipped/failed
-      mark Gmail read if terminal outcome
+      mark Gmail read only if read_policy allows (reply sent or spam)
   → complete_run (or sleep if continuous)
 END
 ```
@@ -1530,7 +1534,8 @@ Reply evals run only on inquiry cases (`evaluator.py:133-134`).
 | TOOL FILES | `app/tools/agent_toolkit.py`, `registry.py` |
 | GMAIL FILE | `app/email/gmail_provider.py` |
 | DATABASE FILES | `app/db/models.py`, `database.py`, `repositories.py` |
-| TEST FILES | `tests/unit/*.py` (71 tests) |
+| TEST FILES | `tests/unit/*.py` (82 tests) |
+| READ POLICY | `app/harness/read_policy.py` |
 | EVAL FILES | `evals/dataset.json`, `evaluator.py`, `run_evals.py` |
 
 ## Important Gaps / Not Implemented

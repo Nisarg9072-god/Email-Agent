@@ -80,7 +80,7 @@ Before the agentic loop, runtime classifies each unread ID:
 |-----------|--------|
 | Not in DB | Process (new email) |
 | `failed` (retryable, attempts < 2) | Reclaim → retry |
-| `skipped` (no reply logged) | Clear → retry |
+| `skipped` (`completed_without_reply`) | Clear → retry agent |
 | `processed` (reply sent) | Batch mark read (cleanup) |
 | `skipped` (`human_review:*`) | **Leave UNREAD** — no retry |
 | `skipped` (`auto_handled:spam`) | Mark read |
@@ -106,7 +106,7 @@ Policy module: `app/harness/read_policy.py`
 | Duplicate guard | `app/harness/state.py` | `ProcessingStateManager` |
 | Mark-read policy | `app/harness/read_policy.py` | Reply/spam only — human-review stays UNREAD |
 | Retry policy | `app/db/repositories.py` | `reclaim_failed_for_retry`, attempt counting |
-| Gmail provider | `app/email/gmail_provider.py` | OAuth, scan, batch mark-read, body parsing |
+| Gmail provider | `app/email/gmail_provider.py` | OAuth, scan, selective mark-read, body parsing |
 | Reply validation | `app/harness/validator.py` | Pre-send checks |
 
 ---
@@ -141,6 +141,16 @@ get_email → get_product_information → send_reply → FINAL
 - Mailbox-level operations (`list_emails`, `get_email_count`) are deterministic, not LLM tools
 - `normalize_decision` repairs some Mistral malformed outputs (missing tool name, premature FINAL)
 - Gmail `list_emails()` returns IDs only; full body fetched on `get_email` tool call
+- Human-review skips stay **unread** in Gmail by design — staff must triage job apps, partnerships, unrelated mail manually
+
+## Selective mark-read (summary)
+
+| Skip / status | Gmail |
+|---------------|-------|
+| Reply sent | Mark read |
+| `auto_handled:spam` | Mark read |
+| `human_review:*` | **Stay unread** |
+| `failed` | **Stay unread** |
 
 ---
 

@@ -17,7 +17,7 @@ This document explains LangGraph concepts, how they relate to the **current AI E
 | Are incoming emails saved locally for later? | **No** — bodies stay in Gmail; agent fetches via API into memory only |
 | One run or continuous? | **Single batch** via `python -m app.main`, or **continuous polling** via `run_agent.py` / `AGENT_CONTINUOUS_MODE` |
 | What is stored in SQLite? | `email_id`, status, error/skip reason, **outgoing reply** audit |
-| Duplicate prevention? | `processed_emails.email_id` PRIMARY KEY + Gmail mark-read + retry limits |
+| Duplicate prevention? | `processed_emails.email_id` PRIMARY KEY + claim logic; selective Gmail mark-read via `read_policy.py` |
 
 ---
 
@@ -155,6 +155,7 @@ If this project were migrated to LangGraph, the mapping would be:
 | Node: tools | `AgentToolKit.execute()` | `app/tools/agent_toolkit.py` |
 | Node: validate send | `ResponseValidator.validate()` | `app/harness/validator.py` |
 | Node: send | `EmailProvider.send_email()` via tool | `app/email/gmail_provider.py` |
+| Node: finalize | `_finalize_email()` + `read_policy.should_mark_gmail_read()` | `app/agent/runtime.py`, `app/harness/read_policy.py` |
 | Graph exit | `return AgentRunResult` | `app/agent/runtime.py` |
 
 ---
@@ -172,7 +173,7 @@ Each step in `_run_agentic_loop()` acts as an implicit "node":
 | **validate_decision** | Harness policy gate | decision + state | allow/reject | None | Deterministic |
 | **execute_tool** | Run authorized tool | tool name + args | tool result | `AgentState` append | Deterministic |
 | **validate_reply** | Pre-send safety (send_reply) | reply fields | valid bool | None | Deterministic |
-| **finalize** | Mark complete / failed / skipped | email_id + outcome | None | DB + Gmail mark-read | Deterministic |
+| **finalize** | Mark complete / failed / skipped | email_id + outcome | None | DB + selective Gmail mark-read (`read_policy`) | Deterministic |
 
 ```mermaid
 flowchart LR
@@ -489,7 +490,7 @@ AgentToolKit (get_email, get_product_information, send_reply)
     ↓
 EmailProvider (mock / gmail)
     ↓
-SQLite (state + audit) + Gmail mark-read
+SQLite (state + audit) + selective Gmail mark-read
 ```
 
 **Files:** `app/agent/runtime.py`, `app/harness/runtime.py`, `app/llm/mistral_provider.py`, `app/email/gmail_provider.py`
@@ -541,7 +542,7 @@ Study sequence mapped to this Email Agent:
 | 5 | **Conditional edges** | `AgentDecision.type`, harness reject, retry reclaim |
 | 6 | **Tool calling** | `AgentToolKit.execute()` — LLM chooses via `decide_next_action` |
 | 7 | **Agent loop** | Outer mailbox loop + inner per-email turn loop |
-| 8 | **Persistence** | SQLite + Gmail mark-read; checkpointing would add mid-run resume |
+| 8 | **Persistence** | SQLite + selective Gmail mark-read (`read_policy.py`); checkpointing would add mid-run resume |
 | 9 | **Subgraphs** | Could extract reply pipeline into subgraph (future) |
 | 10 | **Multi-agent patterns** | Supervisor / hierarchical / P2P — all future |
 | 11 | **Evals** | `evals/` — unchanged by LangGraph; still needed for Mistral quality |
@@ -567,6 +568,7 @@ This would validate understanding without changing security properties.
 | What orchestrates the agent? | **`AgentRuntime`** in `app/agent/runtime.py` |
 | What LLM is used? | Mistral AI (`MistralProvider.decide_next_action`) |
 | Continuous polling? | **`run_agent.py`** or `AGENT_CONTINUOUS_MODE=true` |
+| Selective mark-read? | **`app/harness/read_policy.py`** — reply + spam only |
 | Are legacy AgentLoop diagrams current? | **No** — see `AGENT_WORKFLOW_DIAGRAM.md` |
 | Should we add LangGraph now? | Optional future improvement — not required |
 
