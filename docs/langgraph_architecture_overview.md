@@ -4,10 +4,22 @@ This document explains LangGraph concepts, how they relate to the **current AI E
 
 > **Critical fact:** The current Email Agent does **not** use LangGraph. Orchestration is implemented as an explicit Python class — `AgentLoop` in `app/agent/loop.py`. All diagrams labeled **CURRENT** reflect the actual codebase. Diagrams labeled **CONCEPTUAL / FUTURE** describe patterns not yet implemented.
 
+> **Real API flow (Gmail + Mistral):** For email storage, batch run model, and full production API sequence diagrams, see **[REAL_API_SYSTEM_FLOW.md](REAL_API_SYSTEM_FLOW.md)**.
+
+### Email storage & run model (summary)
+
+| Question | Answer |
+|----------|--------|
+| Are incoming emails saved locally for later? | **No** — bodies stay in Gmail; agent fetches via API into memory only |
+| One run or continuous? | **One CLI batch** — `list_emails()` once, process all, exit |
+| What is stored in SQLite? | `email_id`, status, classification JSON, **outgoing reply** audit |
+| Duplicate prevention? | `processed_emails.email_id` PRIMARY KEY — skip on next run |
+
 ---
 
 ## Table of Contents
 
+0. [Real API System Flow (Gmail + Mistral)](#real-api-system-flow-gmail--mistral) → see [REAL_API_SYSTEM_FLOW.md](REAL_API_SYSTEM_FLOW.md)
 1. [Why LangGraph?](#1-why-langgraph)
 2. [Core Primitives of LangGraph](#2-core-primitives-of-langgraph)
 3. [Current Email Agent Workflow (Not LangGraph)](#3-current-email-agent-workflow-not-langgraph)
@@ -85,6 +97,8 @@ LangGraph is documented here as a **future migration path**, not a current depen
 ## 3. Current Email Agent Workflow (Not LangGraph)
 
 ### CURRENT — Actual Implementation
+
+> **Standalone diagram doc:** Full structure with node-to-file mapping → [`AGENT_WORKFLOW_DIAGRAM.md`](AGENT_WORKFLOW_DIAGRAM.md)
 
 ```mermaid
 flowchart TD
