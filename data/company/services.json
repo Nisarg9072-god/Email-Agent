@@ -1,0 +1,73 @@
+{
+  "services": [
+    {
+      "name": "AI consulting",
+      "description": "Expert AI consulting to help your organization identify and implement AI solutions tailored to your business needs.",
+      "features": [
+        "AI readiness assessment",
+        "Strategy development",
+        "Technology selection guidance",
+        "Implementation roadmap"
+      ],
+      "public_pricing": {
+        "assessment": "$5,000 - 2-week AI readiness assessment",
+        "strategy": "$15,000 - Full AI strategy and roadmap",
+        "ongoing": "$10,000/month - Ongoing advisory retainer"
+      },
+      "use_cases": [
+        "Organizations starting their AI journey",
+        "Companies evaluating AI vendors",
+        "Teams needing expert guidance on AI architecture"
+      ],
+      "internal_cost": "Consultant day rate: $1,200, avg project margin: 55%",
+      "employee_data": "Lead consultant: Jane Smith, 8 years AI experience",
+      "internal_strategy": "Focus on mid-market companies ($10M-$500M revenue)"
+    },
+    {
+      "name": "Custom AI integration",
+      "description": "End-to-end custom AI integration services to embed AI capabilities into your existing systems and workflows.",
+      "features": [
+        "Custom model development",
+        "System integration",
+        "Testing and validation",
+        "Deployment and monitoring",
+        "Training and documentation"
+      ],
+      "public_pricing": {
+        "small": "$25,000 - $50,000 for focused integrations",
+        "medium": "$50,000 - $150,000 for multi-system integrations",
+        "large": "$150,000+ for enterprise-wide AI deployment"
+      },
+      "use_cases": [
+        "Integrating AI into legacy systems",
+        "Building custom ML pipelines",
+        "Connecting AI to existing CRM/ERP systems"
+      ],
+      "internal_cost": "Avg project cost: $85K, delivery team: 3-5 engineers",
+      "unreleased_features": "Auto-integration toolkit launching Q3 2026"
+    },
+    {
+      "name": "AI chatbot implementation",
+      "description": "Full-service chatbot design, development, and deployment for customer-facing and internal use cases.",
+      "features": [
+        "Conversational design",
+        "Multi-platform deployment (web, Slack, Teams)",
+        "Knowledge base setup",
+        "Analytics and optimization",
+        "Ongoing maintenance"
+      ],
+      "public_pricing": {
+        "basic": "$10,000 - Single-channel chatbot",
+        "standard": "$25,000 - Multi-channel with analytics",
+        "premium": "$50,000+ - Enterprise chatbot with custom AI"
+      },
+      "use_cases": [
+        "Customer support automation",
+        "Internal HR/IT helpdesk bots",
+        "Lead qualification chatbots"
+      ],
+      "internal_cost": "Template library reduces delivery time by 40%",
+      "confidential_roadmap": "Voice-enabled chatbots planned for H2 2026"
+    }
+  ]
+}

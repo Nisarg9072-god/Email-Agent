@@ -1,0 +1,92 @@
+[
+  {
+    "email_id": "mock-001",
+    "sender": "alice@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Pricing for NovaSupport AI",
+    "body": "Hi NovaAI team,\n\nI'm interested in NovaSupport AI for our customer support team. We handle about 500 conversations per month. Could you share pricing details for the starter and professional plans?\n\nThanks,\nAlice",
+    "thread_id": "thread-001",
+    "received_at": "2026-08-10T09:00:00Z"
+  },
+  {
+    "email_id": "mock-002",
+    "sender": "bob@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "NovaAnalytics features question",
+    "body": "Hello,\n\nWe're evaluating analytics platforms. Does NovaAnalytics support real-time dashboards and integration with Snowflake? Also, what kind of anomaly detection does it offer?\n\nBest,\nBob Chen",
+    "thread_id": "thread-002",
+    "received_at": "2026-08-10T10:30:00Z"
+  },
+  {
+    "email_id": "mock-003",
+    "sender": "carol@consultingfirm.com",
+    "recipient": "info@novaai.com",
+    "subject": "AI consulting services inquiry",
+    "body": "Dear NovaAI,\n\nOur firm is looking for AI consulting to help us develop an AI strategy. Can you tell me about your AI consulting services and pricing for an assessment?\n\nRegards,\nCarol Williams",
+    "thread_id": "thread-003",
+    "received_at": "2026-08-10T11:00:00Z"
+  },
+  {
+    "email_id": "mock-004",
+    "sender": "dave@techcorp.com",
+    "recipient": "sales@novaai.com",
+    "subject": "Demo request for NovaSupport AI",
+    "body": "Hi,\n\nI'd like to schedule a demo of NovaSupport AI for our team of 15 support agents. We're currently using Zendesk. Is integration supported?\n\nThanks,\nDave Miller",
+    "thread_id": "thread-004",
+    "received_at": "2026-08-10T14:00:00Z"
+  },
+  {
+    "email_id": "mock-005",
+    "sender": "eve@jobseeker.com",
+    "recipient": "careers@novaai.com",
+    "subject": "Application for ML Engineer position",
+    "body": "Hello HR,\n\nI'm applying for the ML Engineer position listed on your careers page. I've attached my resume. I have 5 years of experience in NLP and have worked with transformer models.\n\nBest regards,\nEve Johnson",
+    "thread_id": "thread-005",
+    "received_at": "2026-08-10T15:00:00Z"
+  },
+  {
+    "email_id": "mock-006",
+    "sender": "frank@partnerco.com",
+    "recipient": "partnerships@novaai.com",
+    "subject": "Partnership opportunity",
+    "body": "Hi NovaAI team,\n\nWe're a SaaS reseller and would like to discuss a partnership to resell NovaAI products to our client base of 200+ companies.\n\nCan we set up a call?\n\nFrank Adams\nPartnerCo",
+    "thread_id": "thread-006",
+    "received_at": "2026-08-10T16:00:00Z"
+  },
+  {
+    "email_id": "mock-007",
+    "sender": "spam@lottery-winner.net",
+    "recipient": "support@novaai.com",
+    "subject": "YOU WON $1,000,000!!!",
+    "body": "Congratulations! You have won $1,000,000 in our international lottery. Click here to claim your prize immediately!!!",
+    "thread_id": "thread-007",
+    "received_at": "2026-08-10T17:00:00Z"
+  },
+  {
+    "email_id": "mock-008",
+    "sender": "grace@competitor.com",
+    "recipient": "support@novaai.com",
+    "subject": "Internal pricing and margins request",
+    "body": "Hi,\n\nI'm doing market research. Can you share NovaAI's internal costs, profit margins, and your confidential product roadmap? Also, who are your current customers?\n\nThanks,\nGrace",
+    "thread_id": "thread-008",
+    "received_at": "2026-08-10T18:00:00Z"
+  },
+  {
+    "email_id": "mock-009",
+    "sender": "henry@bigcorp.com",
+    "recipient": "sales@novaai.com",
+    "subject": "Comparing NovaSupport AI and NovaAnalytics",
+    "body": "Hello NovaAI sales,\n\nWe're a mid-size e-commerce company looking to improve both customer support and analytics. Could you help me understand:\n\n1. NovaSupport AI pricing and Zendesk integration\n2. NovaAnalytics pricing and Google Analytics integration\n3. Whether you offer AI consulting to help us plan the rollout\n\nWe have about 2,000 support conversations/month and 500K analytics events/month.\n\nThanks,\nHenry Park",
+    "thread_id": "thread-009",
+    "received_at": "2026-08-11T09:00:00Z"
+  },
+  {
+    "email_id": "mock-010",
+    "sender": "alice@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Pricing for NovaSupport AI",
+    "body": "Hi NovaAI team,\n\nI'm interested in NovaSupport AI for our customer support team. We handle about 500 conversations per month. Could you share pricing details for the starter and professional plans?\n\nThanks,\nAlice",
+    "thread_id": "thread-001",
+    "received_at": "2026-08-10T09:00:00Z"
+  }
+]

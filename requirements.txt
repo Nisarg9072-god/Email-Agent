@@ -1,0 +1,15 @@
+fastapi>=0.110.0
+uvicorn>=0.27.0
+sqlalchemy>=2.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+httpx>=0.26.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+mistralai>=1.0.0
+
+# Optional: Gmail integration (install when using Gmail provider)
+# google-auth-oauthlib>=1.2.0
+# google-auth-httplib2>=0.2.0
+# google-api-python-client>=2.100.0

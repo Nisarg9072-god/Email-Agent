@@ -1,0 +1,226 @@
+{
+  "description": "Evaluation dataset for probabilistic LLM behavior. Separate from unit tests.",
+  "version": "1.0",
+  "emails": [
+    {
+      "id": "eval-001",
+      "sender": "test1@corp.com",
+      "subject": "NovaSupport AI pricing",
+      "body": "What does NovaSupport AI cost for 2000 conversations per month?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_pricing"
+      }
+    },
+    {
+      "id": "eval-002",
+      "sender": "test2@corp.com",
+      "subject": "NovaAnalytics features",
+      "body": "Does NovaAnalytics have real-time dashboards and Snowflake integration?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_features"
+      }
+    },
+    {
+      "id": "eval-003",
+      "sender": "test3@corp.com",
+      "subject": "Consulting help",
+      "body": "We need AI consulting to develop our AI strategy. What services do you offer?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "service_inquiry"
+      }
+    },
+    {
+      "id": "eval-004",
+      "sender": "test4@corp.com",
+      "subject": "Demo please",
+      "body": "Can I schedule a demo of NovaSupport AI? We use Zendesk.",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "demo_request"
+      }
+    },
+    {
+      "id": "eval-005",
+      "sender": "test5@corp.com",
+      "subject": "Job application",
+      "body": "I'm applying for the Senior ML Engineer role. Resume attached.",
+      "expected": {
+        "requires_action": false,
+        "is_product_or_service_inquiry": false,
+        "category": "job_application"
+      }
+    },
+    {
+      "id": "eval-006",
+      "sender": "test6@corp.com",
+      "subject": "Partnership",
+      "body": "We'd like to resell your products to our 500 clients.",
+      "expected": {
+        "requires_action": false,
+        "is_product_or_service_inquiry": false,
+        "category": "partnership"
+      }
+    },
+    {
+      "id": "eval-007",
+      "sender": "spam@bad.net",
+      "subject": "WINNER!!!",
+      "body": "You won $1,000,000! Click here to claim your prize immediately!!!",
+      "expected": {
+        "requires_action": false,
+        "is_product_or_service_inquiry": false,
+        "category": "spam"
+      }
+    },
+    {
+      "id": "eval-008",
+      "sender": "test8@corp.com",
+      "subject": "Internal info request",
+      "body": "Please share your internal costs, profit margins, and customer list.",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": false,
+        "category": "restricted_info_request"
+      }
+    },
+    {
+      "id": "eval-009",
+      "sender": "test9@corp.com",
+      "subject": "Multi-product comparison",
+      "body": "Compare NovaSupport AI and NovaAnalytics pricing. Also interested in AI consulting.",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_pricing"
+      }
+    },
+    {
+      "id": "eval-010",
+      "sender": "test10@corp.com",
+      "subject": "Chatbot for HR",
+      "body": "We need an AI chatbot for our internal HR helpdesk. What do you offer?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "service_inquiry"
+      }
+    },
+    {
+      "id": "eval-011",
+      "sender": "test11@corp.com",
+      "subject": "Maybe interested",
+      "body": "I heard about some AI company. Do you do anything with data?",
+      "expected": {
+        "requires_action": false,
+        "is_product_or_service_inquiry": false,
+        "category": "other"
+      }
+    },
+    {
+      "id": "eval-012",
+      "sender": "test12@corp.com",
+      "subject": "Integration question",
+      "body": "Can NovaSupport AI integrate with Slack and Microsoft Teams?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_features"
+      }
+    },
+    {
+      "id": "eval-013",
+      "sender": "test13@corp.com",
+      "subject": "Custom AI project",
+      "body": "We need custom AI integration with our ERP system. What's the pricing range?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "service_inquiry"
+      }
+    },
+    {
+      "id": "eval-014",
+      "sender": "test14@corp.com",
+      "subject": "Analytics pricing tiers",
+      "body": "What are the pricing tiers for NovaAnalytics? We have about 200K events per month.",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_pricing"
+      }
+    },
+    {
+      "id": "eval-015",
+      "sender": "test15@corp.com",
+      "subject": "Roadmap question",
+      "body": "What's on your confidential product roadmap for 2026?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": false,
+        "category": "restricted_info_request"
+      }
+    },
+    {
+      "id": "eval-016",
+      "sender": "test16@corp.com",
+      "subject": "Thank you",
+      "body": "Thanks for the previous response. That answered my question perfectly.",
+      "expected": {
+        "requires_action": false,
+        "is_product_or_service_inquiry": false,
+        "category": "other"
+      }
+    },
+    {
+      "id": "eval-017",
+      "sender": "test17@corp.com",
+      "subject": "NovaSupport vs competitors",
+      "body": "How does NovaSupport AI compare to other support tools? What features does it have?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_features"
+      }
+    },
+    {
+      "id": "eval-018",
+      "sender": "test18@corp.com",
+      "subject": "Enterprise deal",
+      "body": "We're a Fortune 500 company interested in enterprise pricing for both NovaSupport AI and NovaAnalytics.",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "product_pricing"
+      }
+    },
+    {
+      "id": "eval-019",
+      "sender": "test19@corp.com",
+      "subject": "Ambiguous inquiry",
+      "body": "Tell me about NovaAI.",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": true,
+        "category": "other"
+      }
+    },
+    {
+      "id": "eval-020",
+      "sender": "test20@corp.com",
+      "subject": "Employee info",
+      "body": "Who is your lead AI consultant and what is their day rate?",
+      "expected": {
+        "requires_action": true,
+        "is_product_or_service_inquiry": false,
+        "category": "restricted_info_request"
+      }
+    }
+  ]
+}

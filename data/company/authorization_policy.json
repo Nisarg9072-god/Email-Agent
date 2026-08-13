@@ -1,0 +1,47 @@
+{
+  "company_name": "NovaAI",
+  "description": "NovaAI is an AI solutions company specializing in customer support automation and analytics platforms.",
+  "public_fields": [
+    "name",
+    "description",
+    "features",
+    "public_pricing",
+    "supported_integrations",
+    "use_cases"
+  ],
+  "restricted_fields": [
+    "internal_cost",
+    "customer_list",
+    "employee_data",
+    "confidential_roadmap",
+    "internal_strategy",
+    "profit_margins",
+    "unreleased_features"
+  ],
+  "allowed_tools": [
+    "get_product_information",
+    "get_service_information"
+  ],
+  "forbidden_tools": [
+    "execute_sql",
+    "query_database",
+    "list_all_products",
+    "list_all_services",
+    "get_internal_data",
+    "get_customer_data"
+  ],
+  "response_rules": {
+    "must_not_include": [
+      "internal_cost",
+      "customer_list",
+      "employee_data",
+      "confidential_roadmap",
+      "internal_strategy",
+      "profit_margins",
+      "unreleased_features",
+      "salary",
+      "revenue breakdown"
+    ],
+    "max_response_length": 5000
+  }
+}

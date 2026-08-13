@@ -1,0 +1,70 @@
+{
+  "products": [
+    {
+      "name": "NovaSupport AI",
+      "description": "AI-powered customer support automation platform that integrates with your existing knowledge base.",
+      "features": [
+        "Knowledge-base integration",
+        "Automated response generation",
+        "Analytics dashboard",
+        "API integration",
+        "Multi-channel support (email, chat, social)",
+        "Sentiment analysis"
+      ],
+      "public_pricing": {
+        "starter": "$99/month - up to 1,000 conversations",
+        "professional": "$299/month - up to 10,000 conversations",
+        "enterprise": "Custom pricing - contact sales"
+      },
+      "supported_integrations": [
+        "Zendesk",
+        "Salesforce",
+        "Slack",
+        "Microsoft Teams",
+        "REST API"
+      ],
+      "use_cases": [
+        "Reduce support ticket volume by 40%",
+        "24/7 automated customer responses",
+        "Consistent brand voice across channels"
+      ],
+      "internal_cost": "Development cost: $2.1M, monthly infra: $45K",
+      "customer_list": ["Acme Corp", "TechStart Inc", "GlobalRetail Ltd"],
+      "confidential_roadmap": "Q3 2026: Voice support integration, Q4 2026: Multi-language expansion",
+      "profit_margins": "Gross margin: 72%, Net margin: 34%"
+    },
+    {
+      "name": "NovaAnalytics",
+      "description": "AI analytics platform providing real-time insights and custom dashboards for business intelligence.",
+      "features": [
+        "Real-time analytics",
+        "Custom dashboards",
+        "Data analysis with AI insights",
+        "API integration",
+        "Automated reporting",
+        "Anomaly detection"
+      ],
+      "public_pricing": {
+        "basic": "$149/month - 5 dashboards, 100K events",
+        "pro": "$499/month - 20 dashboards, 1M events",
+        "enterprise": "Custom pricing - contact sales"
+      },
+      "supported_integrations": [
+        "Google Analytics",
+        "Mixpanel",
+        "Segment",
+        "Snowflake",
+        "REST API"
+      ],
+      "use_cases": [
+        "Real-time business KPI monitoring",
+        "AI-powered trend detection",
+        "Automated weekly reports"
+      ],
+      "internal_cost": "Development cost: $1.8M, monthly infra: $38K",
+      "customer_list": ["DataDriven Co", "Insight Partners LLC"],
+      "confidential_roadmap": "Q2 2026: Predictive analytics module, Q4 2026: Industry-specific templates",
+      "profit_margins": "Gross margin: 68%, Net margin: 29%"
+    }
+  ]
+}
