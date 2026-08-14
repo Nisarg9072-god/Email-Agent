@@ -88,5 +88,905 @@
     "body": "Hi NovaAI team,\n\nI'm interested in NovaSupport AI for our customer support team. We handle about 500 conversations per month. Could you share pricing details for the starter and professional plans?\n\nThanks,\nAlice",
     "thread_id": "thread-001",
     "received_at": "2026-08-10T09:00:00Z"
+  },
+  {
+    "email_id": "mock-011",
+    "sender": "user11@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 11",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 11",
+    "thread_id": "thread-011",
+    "received_at": "2026-08-12T09:00:00Z"
+  },
+  {
+    "email_id": "mock-012",
+    "sender": "info12@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 12",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 12",
+    "thread_id": "thread-012",
+    "received_at": "2026-08-12T09:15:00Z"
+  },
+  {
+    "email_id": "mock-013",
+    "sender": "user13@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 13",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 13",
+    "thread_id": "thread-013",
+    "received_at": "2026-08-12T09:30:00Z"
+  },
+  {
+    "email_id": "mock-014",
+    "sender": "customer14@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 14",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 14",
+    "thread_id": "thread-014",
+    "received_at": "2026-08-12T09:45:00Z"
+  },
+  {
+    "email_id": "mock-015",
+    "sender": "info15@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Help with installation - 15",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 15",
+    "thread_id": "thread-015",
+    "received_at": "2026-08-12T10:00:00Z"
+  },
+  {
+    "email_id": "mock-016",
+    "sender": "info16@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 16",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 16",
+    "thread_id": "thread-016",
+    "received_at": "2026-08-12T10:15:00Z"
+  },
+  {
+    "email_id": "mock-017",
+    "sender": "customer17@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 17",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 17",
+    "thread_id": "thread-017",
+    "received_at": "2026-08-12T10:30:00Z"
+  },
+  {
+    "email_id": "mock-018",
+    "sender": "customer18@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 18",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 18",
+    "thread_id": "thread-018",
+    "received_at": "2026-08-12T10:45:00Z"
+  },
+  {
+    "email_id": "mock-019",
+    "sender": "user19@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 19",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 19",
+    "thread_id": "thread-019",
+    "received_at": "2026-08-12T11:00:00Z"
+  },
+  {
+    "email_id": "mock-020",
+    "sender": "info20@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 20",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 20",
+    "thread_id": "thread-020",
+    "received_at": "2026-08-12T11:15:00Z"
+  },
+  {
+    "email_id": "mock-021",
+    "sender": "user21@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 21",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 21",
+    "thread_id": "thread-021",
+    "received_at": "2026-08-12T11:30:00Z"
+  },
+  {
+    "email_id": "mock-022",
+    "sender": "info22@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 22",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 22",
+    "thread_id": "thread-022",
+    "received_at": "2026-08-12T11:45:00Z"
+  },
+  {
+    "email_id": "mock-023",
+    "sender": "customer23@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 23",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 23",
+    "thread_id": "thread-023",
+    "received_at": "2026-08-12T12:00:00Z"
+  },
+  {
+    "email_id": "mock-024",
+    "sender": "info24@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 24",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 24",
+    "thread_id": "thread-024",
+    "received_at": "2026-08-12T12:15:00Z"
+  },
+  {
+    "email_id": "mock-025",
+    "sender": "info25@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 25",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 25",
+    "thread_id": "thread-025",
+    "received_at": "2026-08-12T12:30:00Z"
+  },
+  {
+    "email_id": "mock-026",
+    "sender": "info26@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 26",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 26",
+    "thread_id": "thread-026",
+    "received_at": "2026-08-12T12:45:00Z"
+  },
+  {
+    "email_id": "mock-027",
+    "sender": "user27@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Help with installation - 27",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 27",
+    "thread_id": "thread-027",
+    "received_at": "2026-08-12T13:00:00Z"
+  },
+  {
+    "email_id": "mock-028",
+    "sender": "user28@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 28",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 28",
+    "thread_id": "thread-028",
+    "received_at": "2026-08-12T13:15:00Z"
+  },
+  {
+    "email_id": "mock-029",
+    "sender": "info29@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 29",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 29",
+    "thread_id": "thread-029",
+    "received_at": "2026-08-12T13:30:00Z"
+  },
+  {
+    "email_id": "mock-030",
+    "sender": "user30@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 30",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 30",
+    "thread_id": "thread-030",
+    "received_at": "2026-08-12T13:45:00Z"
+  },
+  {
+    "email_id": "mock-031",
+    "sender": "info31@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 31",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 31",
+    "thread_id": "thread-031",
+    "received_at": "2026-08-12T14:00:00Z"
+  },
+  {
+    "email_id": "mock-032",
+    "sender": "info32@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 32",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 32",
+    "thread_id": "thread-032",
+    "received_at": "2026-08-12T14:15:00Z"
+  },
+  {
+    "email_id": "mock-033",
+    "sender": "customer33@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 33",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 33",
+    "thread_id": "thread-033",
+    "received_at": "2026-08-12T14:30:00Z"
+  },
+  {
+    "email_id": "mock-034",
+    "sender": "customer34@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 34",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 34",
+    "thread_id": "thread-034",
+    "received_at": "2026-08-12T14:45:00Z"
+  },
+  {
+    "email_id": "mock-035",
+    "sender": "customer35@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 35",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 35",
+    "thread_id": "thread-035",
+    "received_at": "2026-08-12T15:00:00Z"
+  },
+  {
+    "email_id": "mock-036",
+    "sender": "user36@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 36",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 36",
+    "thread_id": "thread-036",
+    "received_at": "2026-08-12T15:15:00Z"
+  },
+  {
+    "email_id": "mock-037",
+    "sender": "info37@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 37",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 37",
+    "thread_id": "thread-037",
+    "received_at": "2026-08-12T15:30:00Z"
+  },
+  {
+    "email_id": "mock-038",
+    "sender": "user38@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 38",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 38",
+    "thread_id": "thread-038",
+    "received_at": "2026-08-12T15:45:00Z"
+  },
+  {
+    "email_id": "mock-039",
+    "sender": "customer39@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 39",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 39",
+    "thread_id": "thread-039",
+    "received_at": "2026-08-12T16:00:00Z"
+  },
+  {
+    "email_id": "mock-040",
+    "sender": "user40@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Help with installation - 40",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 40",
+    "thread_id": "thread-040",
+    "received_at": "2026-08-12T16:15:00Z"
+  },
+  {
+    "email_id": "mock-041",
+    "sender": "customer41@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 41",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 41",
+    "thread_id": "thread-041",
+    "received_at": "2026-08-12T16:30:00Z"
+  },
+  {
+    "email_id": "mock-042",
+    "sender": "user42@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 42",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 42",
+    "thread_id": "thread-042",
+    "received_at": "2026-08-12T16:45:00Z"
+  },
+  {
+    "email_id": "mock-043",
+    "sender": "info43@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 43",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 43",
+    "thread_id": "thread-043",
+    "received_at": "2026-08-12T17:00:00Z"
+  },
+  {
+    "email_id": "mock-044",
+    "sender": "customer44@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 44",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 44",
+    "thread_id": "thread-044",
+    "received_at": "2026-08-12T17:15:00Z"
+  },
+  {
+    "email_id": "mock-045",
+    "sender": "customer45@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 45",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 45",
+    "thread_id": "thread-045",
+    "received_at": "2026-08-12T17:30:00Z"
+  },
+  {
+    "email_id": "mock-046",
+    "sender": "info46@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Help with installation - 46",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 46",
+    "thread_id": "thread-046",
+    "received_at": "2026-08-12T17:45:00Z"
+  },
+  {
+    "email_id": "mock-047",
+    "sender": "info47@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Help with installation - 47",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 47",
+    "thread_id": "thread-047",
+    "received_at": "2026-08-12T18:00:00Z"
+  },
+  {
+    "email_id": "mock-048",
+    "sender": "info48@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 48",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 48",
+    "thread_id": "thread-048",
+    "received_at": "2026-08-12T18:15:00Z"
+  },
+  {
+    "email_id": "mock-049",
+    "sender": "info49@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 49",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 49",
+    "thread_id": "thread-049",
+    "received_at": "2026-08-12T18:30:00Z"
+  },
+  {
+    "email_id": "mock-050",
+    "sender": "customer50@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 50",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 50",
+    "thread_id": "thread-050",
+    "received_at": "2026-08-12T18:45:00Z"
+  },
+  {
+    "email_id": "mock-051",
+    "sender": "user51@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 51",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 51",
+    "thread_id": "thread-051",
+    "received_at": "2026-08-12T19:00:00Z"
+  },
+  {
+    "email_id": "mock-052",
+    "sender": "user52@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 52",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 52",
+    "thread_id": "thread-052",
+    "received_at": "2026-08-12T19:15:00Z"
+  },
+  {
+    "email_id": "mock-053",
+    "sender": "customer53@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 53",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 53",
+    "thread_id": "thread-053",
+    "received_at": "2026-08-12T19:30:00Z"
+  },
+  {
+    "email_id": "mock-054",
+    "sender": "user54@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 54",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 54",
+    "thread_id": "thread-054",
+    "received_at": "2026-08-12T19:45:00Z"
+  },
+  {
+    "email_id": "mock-055",
+    "sender": "info55@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 55",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 55",
+    "thread_id": "thread-055",
+    "received_at": "2026-08-12T20:00:00Z"
+  },
+  {
+    "email_id": "mock-056",
+    "sender": "user56@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 56",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 56",
+    "thread_id": "thread-056",
+    "received_at": "2026-08-12T20:15:00Z"
+  },
+  {
+    "email_id": "mock-057",
+    "sender": "user57@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 57",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 57",
+    "thread_id": "thread-057",
+    "received_at": "2026-08-12T20:30:00Z"
+  },
+  {
+    "email_id": "mock-058",
+    "sender": "info58@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 58",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 58",
+    "thread_id": "thread-058",
+    "received_at": "2026-08-12T20:45:00Z"
+  },
+  {
+    "email_id": "mock-059",
+    "sender": "info59@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 59",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 59",
+    "thread_id": "thread-059",
+    "received_at": "2026-08-12T21:00:00Z"
+  },
+  {
+    "email_id": "mock-060",
+    "sender": "info60@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 60",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 60",
+    "thread_id": "thread-060",
+    "received_at": "2026-08-12T21:15:00Z"
+  },
+  {
+    "email_id": "mock-061",
+    "sender": "info61@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 61",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 61",
+    "thread_id": "thread-061",
+    "received_at": "2026-08-12T21:30:00Z"
+  },
+  {
+    "email_id": "mock-062",
+    "sender": "customer62@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 62",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 62",
+    "thread_id": "thread-062",
+    "received_at": "2026-08-12T21:45:00Z"
+  },
+  {
+    "email_id": "mock-063",
+    "sender": "customer63@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 63",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 63",
+    "thread_id": "thread-063",
+    "received_at": "2026-08-12T22:00:00Z"
+  },
+  {
+    "email_id": "mock-064",
+    "sender": "user64@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 64",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 64",
+    "thread_id": "thread-064",
+    "received_at": "2026-08-12T22:15:00Z"
+  },
+  {
+    "email_id": "mock-065",
+    "sender": "user65@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 65",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 65",
+    "thread_id": "thread-065",
+    "received_at": "2026-08-12T22:30:00Z"
+  },
+  {
+    "email_id": "mock-066",
+    "sender": "user66@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 66",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 66",
+    "thread_id": "thread-066",
+    "received_at": "2026-08-12T22:45:00Z"
+  },
+  {
+    "email_id": "mock-067",
+    "sender": "user67@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 67",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 67",
+    "thread_id": "thread-067",
+    "received_at": "2026-08-12T23:00:00Z"
+  },
+  {
+    "email_id": "mock-068",
+    "sender": "customer68@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 68",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 68",
+    "thread_id": "thread-068",
+    "received_at": "2026-08-12T23:15:00Z"
+  },
+  {
+    "email_id": "mock-069",
+    "sender": "info69@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 69",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 69",
+    "thread_id": "thread-069",
+    "received_at": "2026-08-12T23:30:00Z"
+  },
+  {
+    "email_id": "mock-070",
+    "sender": "user70@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 70",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 70",
+    "thread_id": "thread-070",
+    "received_at": "2026-08-12T23:45:00Z"
+  },
+  {
+    "email_id": "mock-071",
+    "sender": "info71@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 71",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 71",
+    "thread_id": "thread-071",
+    "received_at": "2026-08-13T00:00:00Z"
+  },
+  {
+    "email_id": "mock-072",
+    "sender": "info72@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 72",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 72",
+    "thread_id": "thread-072",
+    "received_at": "2026-08-13T00:15:00Z"
+  },
+  {
+    "email_id": "mock-073",
+    "sender": "info73@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 73",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 73",
+    "thread_id": "thread-073",
+    "received_at": "2026-08-13T00:30:00Z"
+  },
+  {
+    "email_id": "mock-074",
+    "sender": "info74@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 74",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 74",
+    "thread_id": "thread-074",
+    "received_at": "2026-08-13T00:45:00Z"
+  },
+  {
+    "email_id": "mock-075",
+    "sender": "customer75@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 75",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 75",
+    "thread_id": "thread-075",
+    "received_at": "2026-08-13T01:00:00Z"
+  },
+  {
+    "email_id": "mock-076",
+    "sender": "customer76@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 76",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 76",
+    "thread_id": "thread-076",
+    "received_at": "2026-08-13T01:15:00Z"
+  },
+  {
+    "email_id": "mock-077",
+    "sender": "info77@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 77",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 77",
+    "thread_id": "thread-077",
+    "received_at": "2026-08-13T01:30:00Z"
+  },
+  {
+    "email_id": "mock-078",
+    "sender": "user78@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 78",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 78",
+    "thread_id": "thread-078",
+    "received_at": "2026-08-13T01:45:00Z"
+  },
+  {
+    "email_id": "mock-079",
+    "sender": "customer79@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 79",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 79",
+    "thread_id": "thread-079",
+    "received_at": "2026-08-13T02:00:00Z"
+  },
+  {
+    "email_id": "mock-080",
+    "sender": "info80@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 80",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 80",
+    "thread_id": "thread-080",
+    "received_at": "2026-08-13T02:15:00Z"
+  },
+  {
+    "email_id": "mock-081",
+    "sender": "user81@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 81",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 81",
+    "thread_id": "thread-081",
+    "received_at": "2026-08-13T02:30:00Z"
+  },
+  {
+    "email_id": "mock-082",
+    "sender": "user82@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 82",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 82",
+    "thread_id": "thread-082",
+    "received_at": "2026-08-13T02:45:00Z"
+  },
+  {
+    "email_id": "mock-083",
+    "sender": "customer83@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 83",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 83",
+    "thread_id": "thread-083",
+    "received_at": "2026-08-13T03:00:00Z"
+  },
+  {
+    "email_id": "mock-084",
+    "sender": "user84@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 84",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 84",
+    "thread_id": "thread-084",
+    "received_at": "2026-08-13T03:15:00Z"
+  },
+  {
+    "email_id": "mock-085",
+    "sender": "user85@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 85",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 85",
+    "thread_id": "thread-085",
+    "received_at": "2026-08-13T03:30:00Z"
+  },
+  {
+    "email_id": "mock-086",
+    "sender": "info86@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 86",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 86",
+    "thread_id": "thread-086",
+    "received_at": "2026-08-13T03:45:00Z"
+  },
+  {
+    "email_id": "mock-087",
+    "sender": "user87@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 87",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 87",
+    "thread_id": "thread-087",
+    "received_at": "2026-08-13T04:00:00Z"
+  },
+  {
+    "email_id": "mock-088",
+    "sender": "user88@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 88",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 88",
+    "thread_id": "thread-088",
+    "received_at": "2026-08-13T04:15:00Z"
+  },
+  {
+    "email_id": "mock-089",
+    "sender": "customer89@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 89",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 89",
+    "thread_id": "thread-089",
+    "received_at": "2026-08-13T04:30:00Z"
+  },
+  {
+    "email_id": "mock-090",
+    "sender": "user90@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 90",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 90",
+    "thread_id": "thread-090",
+    "received_at": "2026-08-13T04:45:00Z"
+  },
+  {
+    "email_id": "mock-091",
+    "sender": "info91@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Feature request - 91",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 91",
+    "thread_id": "thread-091",
+    "received_at": "2026-08-13T05:00:00Z"
+  },
+  {
+    "email_id": "mock-092",
+    "sender": "info92@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 92",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 92",
+    "thread_id": "thread-092",
+    "received_at": "2026-08-13T05:15:00Z"
+  },
+  {
+    "email_id": "mock-093",
+    "sender": "customer93@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 93",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 93",
+    "thread_id": "thread-093",
+    "received_at": "2026-08-13T05:30:00Z"
+  },
+  {
+    "email_id": "mock-094",
+    "sender": "customer94@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Help with installation - 94",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 94",
+    "thread_id": "thread-094",
+    "received_at": "2026-08-13T05:45:00Z"
+  },
+  {
+    "email_id": "mock-095",
+    "sender": "customer95@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 95",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 95",
+    "thread_id": "thread-095",
+    "received_at": "2026-08-13T06:00:00Z"
+  },
+  {
+    "email_id": "mock-096",
+    "sender": "customer96@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 96",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 96",
+    "thread_id": "thread-096",
+    "received_at": "2026-08-13T06:15:00Z"
+  },
+  {
+    "email_id": "mock-097",
+    "sender": "customer97@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 97",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 97",
+    "thread_id": "thread-097",
+    "received_at": "2026-08-13T06:30:00Z"
+  },
+  {
+    "email_id": "mock-098",
+    "sender": "info98@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 98",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 98",
+    "thread_id": "thread-098",
+    "received_at": "2026-08-13T06:45:00Z"
+  },
+  {
+    "email_id": "mock-099",
+    "sender": "customer99@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Demo request - 99",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 99",
+    "thread_id": "thread-099",
+    "received_at": "2026-08-13T07:00:00Z"
+  },
+  {
+    "email_id": "mock-100",
+    "sender": "customer100@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 100",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 100",
+    "thread_id": "thread-100",
+    "received_at": "2026-08-13T07:15:00Z"
+  },
+  {
+    "email_id": "mock-101",
+    "sender": "customer101@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Partnership inquiry - 101",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 101",
+    "thread_id": "thread-101",
+    "received_at": "2026-08-13T07:30:00Z"
+  },
+  {
+    "email_id": "mock-102",
+    "sender": "info102@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 102",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 102",
+    "thread_id": "thread-102",
+    "received_at": "2026-08-13T07:45:00Z"
+  },
+  {
+    "email_id": "mock-103",
+    "sender": "customer103@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Bug report - 103",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 103",
+    "thread_id": "thread-103",
+    "received_at": "2026-08-13T08:00:00Z"
+  },
+  {
+    "email_id": "mock-104",
+    "sender": "customer104@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Consulting services - 104",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 104",
+    "thread_id": "thread-104",
+    "received_at": "2026-08-13T08:15:00Z"
+  },
+  {
+    "email_id": "mock-105",
+    "sender": "info105@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 105",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 105",
+    "thread_id": "thread-105",
+    "received_at": "2026-08-13T08:30:00Z"
+  },
+  {
+    "email_id": "mock-106",
+    "sender": "info106@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 106",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 106",
+    "thread_id": "thread-106",
+    "received_at": "2026-08-13T08:45:00Z"
+  },
+  {
+    "email_id": "mock-107",
+    "sender": "customer107@startup.io",
+    "recipient": "support@novaai.com",
+    "subject": "Account access problem - 107",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 107",
+    "thread_id": "thread-107",
+    "received_at": "2026-08-13T09:00:00Z"
+  },
+  {
+    "email_id": "mock-108",
+    "sender": "info108@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 108",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 108",
+    "thread_id": "thread-108",
+    "received_at": "2026-08-13T09:15:00Z"
+  },
+  {
+    "email_id": "mock-109",
+    "sender": "info109@enterprise.com",
+    "recipient": "support@novaai.com",
+    "subject": "Integration issues - 109",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 109",
+    "thread_id": "thread-109",
+    "received_at": "2026-08-13T09:30:00Z"
+  },
+  {
+    "email_id": "mock-110",
+    "sender": "user110@company.com",
+    "recipient": "support@novaai.com",
+    "subject": "Question about pricing - 110",
+    "body": "Hello NovaAI,\n\nI have a question regarding my account or your services. Please let me know how to proceed.\n\nThanks,\nUser 110",
+    "thread_id": "thread-110",
+    "received_at": "2026-08-13T09:45:00Z"
   }
 ]

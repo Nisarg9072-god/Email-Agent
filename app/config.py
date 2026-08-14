@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # When true, agent re-runs after each cycle until Ctrl+C
     agent_continuous_mode: bool = False
     # Seconds to wait between cycles in continuous mode
-    agent_poll_interval_seconds: int = 60
+    agent_poll_interval_seconds: int = 10
 
     @property
     def company_data_dir(self) -> Path:

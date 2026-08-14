@@ -10,6 +10,9 @@ import logging
 import sys
 from pathlib import Path
 
+# Add project root to sys.path so 'evals' can be imported when running as script
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from evals.evaluator import Evaluator
 
 EVALS_DIR = Path(__file__).resolve().parent
